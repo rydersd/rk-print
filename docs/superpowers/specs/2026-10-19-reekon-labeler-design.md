@@ -308,13 +308,87 @@ Named tests:
 Test plan (RC): crop of a rotated picture; crop to a sliver (minimum 2 mm on the label); re-crop inside a
 group.
 
+### S9 — Every label lives in the library (autosave, empty state)
+
+Added 2026-10-20 on Ryder's request. Rulings: "every label lives in library"; renaming from the library;
+default name is the first line of text. Amends S4 acceptance 1 (explicit Save) by that ruling; S4 is
+otherwise unchanged.
+
+As Ryder, I never lose a label: every label I make is in the library, and an empty library tells me how
+to start one.
+
+Acceptance:
+1. **New Label** (editor and library) creates a library entry at once; the editor's Save button is gone.
+2. Every edit saves to that entry within 1 s of the last change (debounced), including the thumbnail.
+   Reopening the app reopens the last label.
+3. An unnamed label is listed under its first line of text ("Untitled" when it has none). A label renamed
+   in the library keeps that name.
+4. The empty library shows "No Labels" with a **New Label** button that opens a new label in the editor.
+
+Named tests:
+- `LibraryTests.editsSaveWithoutSave`: a new label's entry exists before any edit; after typing "SHELF A"
+  and the debounce, the entry's document holds "SHELF A" and its listed name is "SHELF A".
+- `LibraryTests.renamedNameSurvivesEdits`: rename to "Bins", edit the text, and the name stays "Bins".
+- `LibraryUITests.testEmptyLibraryCreatesLabel`: open the empty library, tap New Label, type, reopen the
+  library, and one label is listed.
+
+Test plan (RC): app killed within the debounce window; many quick New Label taps leaving empty labels;
+the label open in the editor deleted from the library; migrating the S4 working label into the library.
+
+### S10 — Label folders by drag and drop
+
+Added 2026-10-20 on Ryder's request. Ruling: delete asks each time ("Delete group, keep labels" or
+"Delete group and labels"); both are undoable.
+
+As Ryder, I drag one label onto another to put them in a folder, like the Home Screen, and delete the
+folder when I am done with it.
+
+Acceptance:
+1. Dropping a label on another label makes a folder holding both, named "Folder" (renamable). Dropping a
+   label on a folder adds it to that folder. Dragging a label out of an open folder returns it to the top.
+2. Tapping a folder opens it and lists its labels; a folder emptied to one label stays a folder.
+3. Deleting a folder asks: **Delete Folder, Keep Labels** (labels return to the top level) or
+   **Delete Folder and Labels**. Either is undoable in one step.
+
+Named tests:
+- `LibraryTests.dropOnLabelMakesFolder`: dropping B on A leaves one folder holding A and B at the top level.
+- `LibraryTests.deleteFolderKeepingLabelsIsUndoable`: delete keeping labels puts A and B at the top
+  level; undo restores the folder with both.
+- `LibraryTests.deleteFolderAndLabelsIsUndoable`: delete with labels removes all three; undo restores them.
+
+Test plan (RC): drag performance with many labels; dropping a label on itself; folders inside folders
+(not supported: dropping a folder on a label does nothing); VoiceOver alternative to drag ("Move to
+Folder" in the context menu).
+
+### S11 — Templates
+
+Added 2026-10-20 on Ryder's request. Ruling: a template is a starting point copied on use. Moves
+"templates" out of Later.
+
+As Ryder, I save a label as a template and start new labels from it without changing the template.
+
+Acceptance:
+1. **Save as Template** in the editor stores a copy of the current label as a template, named like the
+   label.
+2. The library shows templates in their own **Templates** section above the labels.
+3. Tapping a template creates a new library label from a copy (new ids) and opens it; editing it never
+   changes the template. Templates can be renamed and deleted (undoable).
+
+Named tests:
+- `LibraryTests.labelFromTemplateLeavesTemplateUnchanged`: make a label from a template, edit its text,
+  and the template's document is byte-for-byte unchanged.
+- `LibraryTests.templateDeleteIsUndoable`: delete a template, undo, and it is back.
+
+Test plan (RC): template with pictures (size); template whose fonts are gone; editing a template itself
+(not supported in this story: replace it by saving a new one).
+
 ## Later (not in this spec)
 
 - **Tape-measure field**: connect to a T1/T1M/T1R (SDK Section I), insert the received or live measurement
   into a text block in the user's chosen unit. Needs its own spec.
 - **Stock auto-detect spike**: log `0xAE02` notifications while swapping rolls; build detection only if the
   bytes reliably identify the stock.
-- Other elements (QR/barcodes, icons, lines), templates.
+- Other elements (QR/barcodes, icons, lines). (Templates moved to S11 on 2026-10-20.)
 
 ## Open questions
 
