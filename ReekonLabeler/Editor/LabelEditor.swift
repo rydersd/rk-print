@@ -162,15 +162,7 @@ final class LabelEditor {
     }
 
     private func registerUndo(restoring previous: LabelDocument, action: String) {
-        guard let undoManager else { return }
-        // Outside an event loop (tests, scripted edits) there is no automatic group: make one per action.
-        let ownGroup = !undoManager.groupsByEvent && undoManager.groupingLevel == 0
-        if ownGroup { undoManager.beginUndoGrouping() }
-        undoManager.registerUndo(withTarget: self) { editor in
-            MainActor.assumeIsolated { editor.restore(previous, action: action) }
-        }
-        undoManager.setActionName(action)
-        if ownGroup { undoManager.endUndoGrouping() }
+        undoManager?.registerAction(action, target: self) { editor in editor.restore(previous, action: action) }
     }
 
     /// Undo and redo: swap in the snapshot and register the reverse.

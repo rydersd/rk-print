@@ -3,19 +3,19 @@ import Foundation
 
 /// A font family and one of its faces. `face` is a PostScript name for installed families, or a
 /// weight name ("Bold") for the system families (see `FontCatalog`).
-struct FontSpec: Codable, Hashable, Sendable {
+nonisolated struct FontSpec: Codable, Hashable, Sendable {
     var family: String
     var face: String
 
     static let standard = FontSpec(family: FontCatalog.systemFamily, face: "Bold")
 }
 
-enum TextAlignmentOption: String, Codable, Sendable, CaseIterable {
+nonisolated enum TextAlignmentOption: String, Codable, Sendable, CaseIterable {
     case left, center, right
 }
 
 /// One block of text on the label. Position and width are in label-space mm; height comes from layout.
-struct TextBlock: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct TextBlock: Codable, Hashable, Sendable, Identifiable {
     var id = UUID()
     var text = ""
     var originMM: CGPoint

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Grid spacing for snapping, in mm. `off` disables snapping.
-enum GridStep: Double, Codable, Sendable, CaseIterable {
+nonisolated enum GridStep: Double, Codable, Sendable, CaseIterable {
     case off = 0
     case half = 0.5
     case one = 1
@@ -18,7 +18,7 @@ enum GridStep: Double, Codable, Sendable, CaseIterable {
 }
 
 /// A whole label: its stock, how it is shown, and its text blocks.
-struct LabelDocument: Codable, Hashable, Sendable {
+nonisolated struct LabelDocument: Codable, Hashable, Sendable {
     var size = LabelSize.small
     var orientation = Orientation.headNative
     var grid = GridStep.one

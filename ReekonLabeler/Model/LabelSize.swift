@@ -2,7 +2,7 @@ import Foundation
 
 /// A label stock size. The head axis is the side that runs across the P1L's print head; the feed axis
 /// is the direction the label travels (SDK Section II, Print Job Format).
-struct LabelSize: Codable, Hashable, Sendable {
+nonisolated struct LabelSize: Codable, Hashable, Sendable {
     /// Length of the label side that runs across the print head, in mm.
     var headMM: Double
     /// Length of the label in the feed direction, in mm.
@@ -40,7 +40,7 @@ struct LabelSize: Codable, Hashable, Sendable {
 }
 
 /// How the label is shown on the canvas.
-enum Orientation: String, Codable, Sendable, CaseIterable {
+nonisolated enum Orientation: String, Codable, Sendable, CaseIterable {
     /// The head axis runs left to right (30 × 50 reads 50 wide by 30 tall).
     case headNative
     /// The feed axis runs left to right; the bitmap is rotated 90° before printing.

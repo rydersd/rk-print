@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// The label's dimensions in label space: millimetres, origin at the label's top-left as shown on the
 /// canvas. The printable area is the part of the label the head can reach.
-struct LabelGeometry: Equatable, Sendable {
+nonisolated struct LabelGeometry: Equatable, Sendable {
     static let dotsPerMM = 8.0
 
     let labelSizeMM: CGSize
