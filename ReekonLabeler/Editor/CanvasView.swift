@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The label at true proportions. What you see is the 1-bit bitmap the printer gets; blocks are
+/// The label at true proportions. What you see is the 1-bit bitmap the printer gets; elements are
 /// interactive overlays on top. All gesture maths converts screen points to label mm via `scale`.
 struct CanvasView: View {
     let editor: LabelEditor
@@ -24,8 +24,8 @@ struct CanvasView: View {
                         .offset(x: geometry.printableRect.minX * scale, y: geometry.printableRect.minY * scale)
                         .allowsHitTesting(false)
                 }
-                ForEach(Array(editor.document.blocks.enumerated()), id: \.element.id) { index, block in
-                    BlockOverlay(editor: editor, block: block, index: index, scale: scale)
+                ForEach(Array(editor.document.elements.enumerated()), id: \.element.id) { index, element in
+                    ElementOverlay(editor: editor, element: element, index: index, scale: scale)
                 }
             }
             .frame(width: size.width, height: size.height)
@@ -35,7 +35,7 @@ struct CanvasView: View {
             .gesture(pinch)
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             .contentShape(.rect)
-            .onTapGesture { editor.select(nil) }
+            .onTapGesture { editor.clearSelection() }
         }
     }
 
@@ -76,17 +76,17 @@ struct CanvasView: View {
         }
     }
 
-    /// Pinch anywhere on the label resizes the selected block's text.
+    /// Pinch anywhere on the label scales the selection: text size, or picture width.
     private var pinch: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                guard let id = editor.selectedID else { return }
+                guard !editor.selection.isEmpty else { return }
                 if !isPinching { isPinching = true; editor.beginGesture() }
-                editor.scaleBlock(id, by: value.magnification)
+                editor.scaleSelection(by: value.magnification)
             }
             .onEnded { _ in
                 isPinching = false
-                editor.endGesture(action: "Text Size")
+                editor.endGesture(action: "Scale")
             }
     }
 }

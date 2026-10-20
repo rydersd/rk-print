@@ -9,10 +9,10 @@ struct FontFace: Hashable, Identifiable, Sendable {
 }
 
 /// The fonts the editor offers and how a `FontSpec` becomes a real font.
-enum FontCatalog {
-    nonisolated static let systemFamily = "System"
-    nonisolated static let roundedFamily = "System Rounded"
-    nonisolated static let monoFamily = "System Mono"
+nonisolated enum FontCatalog {
+    static let systemFamily = "System"
+    static let roundedFamily = "System Rounded"
+    static let monoFamily = "System Mono"
     private static let systemFamilies = [systemFamily, roundedFamily, monoFamily]
 
     private static let systemWeights: [(String, UIFont.Weight)] = [

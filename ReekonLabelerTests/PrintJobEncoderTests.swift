@@ -19,7 +19,7 @@ struct PrintJobEncoderTests {
 
     @Test func rotatedLabelIsHeadWide() {
         var doc = LabelDocument(size: .large, orientation: .rotated)
-        doc.blocks = [TextBlock(text: "PANTRY", originMM: CGPoint(x: 0, y: 1), widthMM: 78, pointSize: 60)]
+        doc.elements = [.text("PANTRY", originMM: CGPoint(x: 0, y: 1), widthMM: 78, pointSize: 60)]
         let bitmap = PrintJobEncoder.headBitmap(for: doc)
         #expect(bitmap.width == 384)
         #expect(bitmap.height == 624)

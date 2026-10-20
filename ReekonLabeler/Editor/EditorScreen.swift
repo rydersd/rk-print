@@ -1,9 +1,10 @@
 import os
+import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
 
-/// The whole app on one screen: the label canvas, the selected block's inspector, and the tools.
+/// The whole app on one screen: the label canvas, the selection's inspector, and the tools.
 struct EditorScreen: View {
     @Environment(\.modelContext) private var modelContext
     @State private var editor: LabelEditor
@@ -14,6 +15,8 @@ struct EditorScreen: View {
     @State private var sheet: Sheet?
     @State private var saveName = ""
     @State private var isNamingSave = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var cropping: CropRequest?
 
     private enum Sheet: String, Identifiable {
         case labelSize, fonts, printer, library
@@ -32,17 +35,27 @@ struct EditorScreen: View {
                 CanvasView(editor: editor)
                     .padding(16)
                     .frame(maxHeight: .infinity)
-                if editor.selectedBlock != nil {
-                    InspectorView(editor: editor, showFonts: { sheet = .fonts })
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                if !editor.selection.isEmpty {
+                    InspectorView(editor: editor, showFonts: { sheet = .fonts }) { element in
+                        if let picture = element.picture { cropping = CropRequest(picture: picture, elementID: element.id) }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .background(Theme.canvasBackground)
-            .animation(.snappy(duration: 0.2), value: editor.selectedID == nil)
+            .animation(.snappy(duration: 0.2), value: editor.selection.isEmpty)
             .navigationTitle(editor.libraryName ?? "Label")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .sheet(item: $sheet) { sheet in sheetContent(sheet) }
+            .fullScreenCover(item: $cropping) { request in
+                CropView(request: request) { crop in finishCrop(request, crop: crop) }
+            }
+            .onChange(of: pickedPhoto) { _, item in
+                guard let item else { return }
+                pickedPhoto = nil
+                Task { await importPhoto(item) }
+            }
             .alert("Save Label", isPresented: $isNamingSave) {
                 TextField("Name", text: $saveName)
                 Button("Save") { save() }
@@ -62,10 +75,12 @@ struct EditorScreen: View {
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarLeading) {
             Button("Library", systemImage: "books.vertical") { sheet = .library }
-            Button("Save", systemImage: "square.and.arrow.down") {
-                saveName = editor.libraryName ?? defaultName
-                isNamingSave = true
+            // In the top bar so it stays reachable while the keyboard covers the bottom bar.
+            Button(editor.isSelecting ? "Done Selecting" : "Select",
+                   systemImage: editor.isSelecting ? "checkmark.circle.fill" : "checkmark.circle") {
+                editor.setSelecting(!editor.isSelecting)
             }
+            .accessibilityIdentifier("selectButton")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button("Undo", systemImage: "arrow.uturn.backward") { undoManager.undo() }
@@ -73,15 +88,20 @@ struct EditorScreen: View {
             Button("Redo", systemImage: "arrow.uturn.forward") { undoManager.redo() }
                 .disabled(!canRedo)
         }
-        // In the top bar so it stays reachable while the keyboard covers the bottom bar.
-        ToolbarItem(placement: .topBarTrailing) {
-            Button("Add Text", systemImage: "plus") { editor.addBlock() }
+        // In the top bar so they stay reachable while the keyboard covers the bottom bar.
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                Label("Add Picture", systemImage: "photo.badge.plus")
+            }
+            .accessibilityIdentifier("addPictureButton")
+            Button("Add Text", systemImage: "plus") { editor.addText() }
                 .accessibilityIdentifier("addTextButton")
         }
         ToolbarItemGroup(placement: .bottomBar) {
             Button(editor.document.size.displayName) { sheet = .labelSize }
                 .accessibilityIdentifier("labelSizeButton")
-            Button("Rotate", systemImage: "rotate.right") {
+            // Turns the whole label; the inspector's Rotate 90° turns the selection.
+            Button("Turn Label", systemImage: "rectangle.portrait.rotate") {
                 editor.setOrientation(editor.document.orientation == .headNative ? .rotated : .headNative)
             }
             Menu("Grid", systemImage: editor.document.grid == .off ? "grid.circle" : "grid.circle.fill") {
@@ -90,6 +110,12 @@ struct EditorScreen: View {
                 }
             }
             Spacer()
+            // Beside Print: both send the label somewhere. Keeps the top bar to two leading items so
+            // Add Text and Add Picture never collapse into the overflow menu.
+            Button("Save", systemImage: "square.and.arrow.down") {
+                saveName = editor.libraryName ?? defaultName
+                isNamingSave = true
+            }
             printButton
         }
     }
@@ -97,7 +123,7 @@ struct EditorScreen: View {
     private var printButton: some View {
         Button {
             if printer.isReady {
-                editor.select(nil)
+                editor.clearSelection()
                 Task { await printer.print(editor.document) }
             } else {
                 sheet = .printer
@@ -118,10 +144,12 @@ struct EditorScreen: View {
         case .labelSize:
             LabelSizeSheet(current: editor.document.size) { editor.setSize($0) }
         case .fonts:
-            FontPickerSheet(current: editor.selectedBlock?.font ?? .standard) { family in
-                guard let block = editor.selectedBlock else { return }
-                let face = FontCatalog.defaultFace(for: family, matching: block.font)
-                editor.updateBlock(block.id, action: "Font") { $0.font = FontSpec(family: family, face: face) }
+            FontPickerSheet(current: editor.selectedElements.compactMap(\.textContent).first?.font ?? .standard) { family in
+                editor.updateSelected(action: "Font") { element in
+                    guard let font = element.textContent?.font else { return }
+                    element.textContent?.font = FontSpec(family: family,
+                                                         face: FontCatalog.defaultFace(for: family, matching: font))
+                }
             }
         case .printer:
             PrinterSheet(printer: printer)
@@ -132,11 +160,38 @@ struct EditorScreen: View {
         }
     }
 
+    // MARK: Pictures
+
+    /// Loads the picked photo, shrinks it to a greyscale picture off the main thread, then opens the crop.
+    private func importPhoto(_ item: PhotosPickerItem) async {
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { return }
+            let picture = await Task.detached(priority: .userInitiated) { PictureImport.picture(fromImageData: data) }.value
+            guard let picture else {
+                Logger.editorUI.error("Picked photo could not be read as an image")
+                return
+            }
+            cropping = CropRequest(picture: picture, elementID: nil)
+        } catch {
+            Logger.editorUI.error("Photo load failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func finishCrop(_ request: CropRequest, crop: CGRect) {
+        if let id = request.elementID {
+            editor.setCrop(crop, for: id)
+        } else {
+            var picture = request.picture
+            picture.crop = crop
+            editor.addPicture(picture)
+        }
+    }
+
     // MARK: Saving
 
     /// The first line of text, else "Label".
     private var defaultName: String {
-        let first = editor.document.blocks.lazy.map(\.text).first { !$0.isEmpty } ?? ""
+        let first = editor.document.elements.lazy.compactMap(\.textContent?.text).first { !$0.isEmpty } ?? ""
         let line = first.split(separator: "\n").first.map(String.init) ?? ""
         return line.isEmpty ? "Label" : line
     }

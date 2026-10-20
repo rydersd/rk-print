@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// A 1-bit image, one byte per dot (1 = black), rows top to bottom. This is what the P1L prints.
-struct Bitmap: Equatable, Sendable {
+nonisolated struct Bitmap: Equatable, Sendable {
     let width: Int
     let height: Int
     var dots: [UInt8]

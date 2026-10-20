@@ -9,4 +9,6 @@ enum Theme {
     static let gridDot = Color(.systemGray2)
     static let selection = Color.accentColor
     static let handle = Color.accentColor
+    /// Covers the part of a picture the crop will cut away.
+    static let cropDim = Color.black.opacity(0.5)
 }
