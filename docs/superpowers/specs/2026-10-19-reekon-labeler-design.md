@@ -53,7 +53,7 @@ origin top-left.
 
 ## Architecture
 
-XcodeGen `project.yml` → `ReekonLabeler.xcodeproj`. iOS 27, Swift 6 strict concurrency, SwiftUI,
+XcodeGen `project.yml` → `ReekonLabeler.xcodeproj`. iOS 26.0 deployment target (Ryder's phone runs 26.6; amended 2026-10-20), built with the iOS 27 SDK, Swift 6 strict concurrency, SwiftUI,
 Swift Testing for unit tests, XCTest UI tests. `Logger` (subsystem `tools.reekon.labeler`), never `print`.
 
 ```
@@ -151,7 +151,7 @@ Acceptance:
 
 Named tests:
 - `LayoutEngineTests.dragPastEdgeStopsAtPrintableEdge` — a drag of +100 mm puts the block's right edge
-  exactly at 48 mm.
+  exactly at the printable edge: 49 mm in label space on 50 mm stock (1 mm margin + 48 mm).
 - `LayoutEngineTests.overflowingTextShrinksToFit` — text that wraps to five lines at 24 pt in a 30 mm-tall
   label gets an effective size whose laid-out height is ≤ the printable height.
 - `LabelDocumentTests.undoRestoresPositionAfterClampedDrag` — move, then undo, gives the original origin.
