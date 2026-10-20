@@ -6,6 +6,8 @@ struct CropRequest: Identifiable {
     var picture: PictureContent
     /// The element being re-cropped; nil for a picture that is not on the label yet.
     var elementID: UUID?
+    /// The tallest crop (height ÷ width) that still prints at least 2 mm wide on the current label.
+    var maximumAspect: Double
 }
 
 /// Free-aspect crop over the whole original picture (S8). Corners and edges resize, the middle moves.
@@ -62,6 +64,10 @@ struct CropView: View {
 
     private static let full = CGRect(x: 0, y: 0, width: 1, height: 1)
 
+    private var pixelAspect: Double {
+        Double(request.picture.pixelHeight) / Double(max(request.picture.pixelWidth, 1))
+    }
+
     /// The picture aspect-fitted and centred in `size`, offset by the 16 pt margin.
     private func fittedRect(in size: CGSize) -> CGRect {
         let aspect = Double(request.picture.pixelHeight) / Double(max(request.picture.pixelWidth, 1))
@@ -110,7 +116,8 @@ struct CropView: View {
                 if dragStart == nil { dragStart = crop }
                 let delta = CGSize(width: value.translation.width / fitted.width,
                                    height: value.translation.height / fitted.height)
-                crop = handle.adjust(start, by: delta)
+                crop = handle.adjust(start, by: delta, pixelAspect: pixelAspect,
+                                     maximumAspect: request.maximumAspect)
             }
             .onEnded { _ in dragStart = nil }
     }
@@ -125,6 +132,23 @@ enum CropHandle: CaseIterable {
         let x = movesLeft ? rect.minX : movesRight ? rect.maxX : rect.midX
         let y = movesTop ? rect.minY : movesBottom ? rect.maxY : rect.midY
         return CGPoint(x: x, y: y)
+    }
+
+    /// `start` dragged by `delta`, stopping before the crop's height ÷ width (in pixels, using `pixelAspect`
+    /// = pixel height ÷ pixel width) passes `maximumAspect`, or the start's aspect when that is already past it.
+    func adjust(_ start: CGRect, by delta: CGSize, pixelAspect: Double, maximumAspect: Double) -> CGRect {
+        func aspect(_ rect: CGRect) -> Double { rect.height / rect.width * pixelAspect }
+        let limit = max(maximumAspect, aspect(start))
+        let full = adjust(start, by: delta)
+        guard aspect(full) > limit else { return full }
+        // Find the furthest point along the drag that stays inside the limit, so the handle stops at it.
+        var low = 0.0, high = 1.0
+        for _ in 0..<20 {
+            let mid = (low + high) / 2
+            let rect = adjust(start, by: CGSize(width: delta.width * mid, height: delta.height * mid))
+            if aspect(rect) > limit { high = mid } else { low = mid }
+        }
+        return adjust(start, by: CGSize(width: delta.width * low, height: delta.height * low))
     }
 
     /// `start` with this handle dragged by `delta`, both in unit coordinates of the picture.

@@ -37,7 +37,9 @@ struct EditorScreen: View {
                     .frame(maxHeight: .infinity)
                 if !editor.selection.isEmpty {
                     InspectorView(editor: editor, showFonts: { sheet = .fonts }) { element in
-                        if let picture = element.picture { cropping = CropRequest(picture: picture, elementID: element.id) }
+                        guard let picture = element.picture else { return }
+                        cropping = CropRequest(picture: picture, elementID: element.id,
+                                               maximumAspect: editor.maximumPictureAspect(rotation: element.rotation))
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -171,7 +173,8 @@ struct EditorScreen: View {
                 Logger.editorUI.error("Picked photo could not be read as an image")
                 return
             }
-            cropping = CropRequest(picture: picture, elementID: nil)
+            cropping = CropRequest(picture: picture, elementID: nil,
+                                   maximumAspect: editor.maximumPictureAspect(rotation: .none))
         } catch {
             Logger.editorUI.error("Photo load failed: \(error.localizedDescription, privacy: .public)")
         }

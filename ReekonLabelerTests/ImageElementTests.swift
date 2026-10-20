@@ -21,4 +21,20 @@ struct ImageElementTests {
         let bitmap = LabelRenderer.render(doc)
         #expect(bitmap.inkCount(inDots: frame) == Int(frame.width) * Int(frame.height))
     }
+
+    /// S8 (Codex review): the crop screen stops a sliver crop before the picture would print narrower than
+    /// 2 mm on the label.
+    @Test func sliverCropStopsAtMinimumWidth() throws {
+        var picture = TestPictures.make(width: 100, height: 100) { _, _ in 0 }
+        let document = LabelDocument(size: .small, orientation: .headNative, grid: .off, elements: [])
+        let editor = LabelEditor(document: document, undoManager: nil, persistsWorkingLabel: false)
+        let limit = editor.maximumPictureAspect(rotation: .none)
+
+        picture.crop = CropHandle.left.adjust(CGRect(x: 0, y: 0, width: 1, height: 1), by: CGSize(width: 0.97, height: 0),
+                                              pixelAspect: 1, maximumAspect: limit)
+        #expect(picture.crop.width > PictureContent.minimumCropFraction)
+        let element = TestPictures.element(picture, x: 1, y: 1, width: 48)
+        let layout = LayoutEngine.layout(element, in: document.geometry)
+        #expect(layout.contentSizeMM.width >= LabelElement.minimumWidthMM - 0.01)
+    }
 }

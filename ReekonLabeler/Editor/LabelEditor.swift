@@ -177,6 +177,14 @@ final class LabelEditor {
         commit(doc, action: action)
     }
 
+    /// The tallest crop (height ÷ width) a picture turned by `rotation` can have and still print at least
+    /// `LabelElement.minimumWidthMM` wide here: taller pictures narrow to fit the label's cross span.
+    func maximumPictureAspect(rotation: QuarterTurn) -> Double {
+        let printable = document.geometry.printableRect
+        let crossSpan = rotation.isSideways ? printable.width : printable.height
+        return crossSpan / LabelElement.minimumWidthMM
+    }
+
     /// Re-crops a picture from its full original, keeping its width on the label (S8).
     func setCrop(_ crop: CGRect, for id: UUID) {
         guard document.element(id)?.picture?.crop != crop else { return }
