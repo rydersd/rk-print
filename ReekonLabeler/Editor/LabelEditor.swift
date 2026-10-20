@@ -14,6 +14,8 @@ final class LabelEditor {
     private(set) var isSelecting = false
     /// The text element whose inline text field has focus.
     var editingID: UUID?
+    /// The member of the selected group that a second tap picked out.
+    private var focusedMemberID: UUID?
     private(set) var layouts: [UUID: ElementLayout] = [:]
     private(set) var bitmap: Bitmap
     private(set) var image: CGImage?
@@ -45,6 +47,11 @@ final class LabelEditor {
     /// The selected element when exactly one is selected.
     var selectedID: UUID? { selection.count == 1 ? selection.first : nil }
     var selectedElement: LabelElement? { selectedID.flatMap { document.element($0) } }
+    /// The element whose own settings the inspector shows: the single selected element, or the group member
+    /// chosen by a second tap, so a picture in a group can still be cropped (S8).
+    var inspectedElement: LabelElement? {
+        selectedElement ?? focusedMemberID.flatMap { selection.contains($0) ? document.element($0) : nil }
+    }
     /// Selected elements, back to front.
     var selectedElements: [LabelElement] { document.elements.filter { selection.contains($0.id) } }
 
@@ -67,12 +74,16 @@ final class LabelEditor {
         if isSelecting {
             if members.isSubset(of: selection) { selection.subtract(members) } else { selection.formUnion(members) }
             editingID = nil
+            focusedMemberID = nil
         } else if members.count > 1 {
-            editingID = selection == members && isText ? id : nil
+            let isSecondTap = selection == members
+            editingID = isSecondTap && isText ? id : nil
+            focusedMemberID = isSecondTap ? id : nil
             selection = members
         } else {
             selection = members
             editingID = isText ? id : nil
+            focusedMemberID = nil
         }
     }
 

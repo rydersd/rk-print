@@ -115,4 +115,26 @@ struct LabelEditorTests {
         #expect(editor.selection == [first, second])
         #expect(editor.canGroup)
     }
+
+    /// S8 (Codex review): a picture inside a group stays croppable. The first tap selects the group; a
+    /// second tap on the picture shows that picture's own settings without leaving the group.
+    @Test func secondTapOnGroupedPictureShowsItsSettings() throws {
+        let picture = TestPictures.element(TestPictures.make(width: 20, height: 20) { _, _ in 0 }, x: 1, y: 2, width: 10)
+        let text = LabelElement.text("A", originMM: CGPoint(x: 21, y: 2), widthMM: 10)
+        let editor = LabelEditor(document: LabelDocument(grid: .one, elements: [picture, text]), undoManager: nil,
+                                 persistsWorkingLabel: false)
+        editor.setSelecting(true)
+        editor.tap(picture.id)
+        editor.tap(text.id)
+        editor.group()
+        editor.setSelecting(false)
+        editor.clearSelection()
+
+        editor.tap(picture.id)
+        #expect(editor.selection == [picture.id, text.id])
+        #expect(editor.inspectedElement == nil)
+        editor.tap(picture.id)
+        #expect(editor.selection == [picture.id, text.id])
+        #expect(editor.inspectedElement?.id == picture.id)
+    }
 }

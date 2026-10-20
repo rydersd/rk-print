@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Controls for the selection. Text settings apply to every selected text element (S5); picture settings
-/// show for a single picture (S7, S8); rotate, group and delete apply to the whole selection.
+/// show for a single picture, or a grouped picture tapped twice (S7, S8); rotate, group and delete apply
+/// to the whole selection.
 struct InspectorView: View {
     let editor: LabelEditor
     let showFonts: () -> Void
@@ -11,7 +12,7 @@ struct InspectorView: View {
         if !editor.selection.isEmpty {
             VStack(spacing: 12) {
                 if let text = editor.selectedElements.compactMap(\.textContent).first { textRows(text) }
-                if let element = editor.selectedElement, let picture = element.picture {
+                if let element = editor.inspectedElement, let picture = element.picture {
                     pictureRows(element, picture)
                 }
                 arrangeRow
