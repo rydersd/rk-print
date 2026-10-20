@@ -71,7 +71,8 @@ struct LibraryView: View {
             .navigationDestination(for: UUID.self) { folderID in
                 FolderContents(library: library, folderID: folderID, openID: openID,
                                name: folders.first { $0.id == folderID }?.name ?? "Folder",
-                               open: openAndClose, delete: delete)
+                               open: openAndClose, delete: delete,
+                               rename: { label in newName = label.name; renaming = .label(label.id) })
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
@@ -83,30 +84,41 @@ struct LibraryView: View {
                     ToolbarItem(placement: .bottomBar) { newLabelButton }
                 }
             }
-            .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-                TextField("Name", text: $newName)
-                Button("Rename") { rename() }
-                Button("Cancel", role: .cancel) {}
+        }
+        // On the stack, not the list, so they also present over an open folder.
+        .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") { rename() }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete \(deletingFolder?.name ?? "Folder")?",
+                            isPresented: Binding(get: { deletingFolder != nil },
+                                                 set: { if !$0 { deletingFolder = nil } }),
+                            titleVisibility: .visible, presenting: deletingFolder) { folder in
+            Button("Delete Folder, Keep Labels") { _ = try? library.deleteFolder(folder.id, keepingLabels: true) }
+            Button("Delete Folder and Labels", role: .destructive) {
+                if let ids = try? library.deleteFolder(folder.id, keepingLabels: false) { deleted(ids) }
             }
-            .confirmationDialog("Delete \(deletingFolder?.name ?? "Folder")?",
-                                isPresented: Binding(get: { deletingFolder != nil },
-                                                     set: { if !$0 { deletingFolder = nil } }),
-                                titleVisibility: .visible, presenting: deletingFolder) { folder in
-                Button("Delete Folder, Keep Labels") { _ = try? library.deleteFolder(folder.id, keepingLabels: true) }
-                Button("Delete Folder and Labels", role: .destructive) {
-                    if let ids = try? library.deleteFolder(folder.id, keepingLabels: false) { deleted(ids) }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: { _ in
-                Text("Either can be undone.")
-            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Either can be undone.")
         }
     }
 
     private func labelRow(_ label: SavedLabel) -> some View {
         Button { openAndClose(label) } label: { LabelRow(label: label, isOpen: label.id == openID) }
             .accessibilityIdentifier("libraryLabel")
-            .contextMenu { renameButton(label.name, .label(label.id)) }
+            .contextMenu {
+                renameButton(label.name, .label(label.id))
+                // The way into a folder without dragging, for VoiceOver too.
+                if !folders.isEmpty {
+                    Menu("Move to Folder", systemImage: "folder") {
+                        ForEach(folders) { folder in
+                            Button(folder.name) { try? library.move(label.id, toFolder: folder.id) }
+                        }
+                    }
+                }
+            }
             .draggable(label.id.uuidString) { LabelRow.thumbnail(label) }
             .dropDestination(for: String.self) { items, _ in
                 guard let dragged = items.first.flatMap(UUID.init(uuidString:)) else { return false }
@@ -182,15 +194,17 @@ private struct FolderContents: View {
     let name: String
     let open: (SavedLabel) -> Void
     let delete: ([UUID]) -> Void
+    let rename: (SavedLabel) -> Void
     @Query private var labels: [SavedLabel]
 
     init(library: LabelLibrary, folderID: UUID, openID: UUID?, name: String, open: @escaping (SavedLabel) -> Void,
-         delete: @escaping ([UUID]) -> Void) {
+         delete: @escaping ([UUID]) -> Void, rename: @escaping (SavedLabel) -> Void) {
         self.library = library
         self.openID = openID
         self.name = name
         self.open = open
         self.delete = delete
+        self.rename = rename
         _labels = Query(filter: #Predicate { $0.folderID == folderID && !$0.isTemplate },
                         sort: \.modified, order: .reverse)
     }
@@ -210,6 +224,7 @@ private struct FolderContents: View {
                     .accessibilityIdentifier("libraryLabel")
                     .draggable(label.id.uuidString) { LabelRow.thumbnail(label) }
                     .contextMenu {
+                        Button("Rename", systemImage: "pencil") { rename(label) }
                         Button("Move Out of Folder", systemImage: "arrow.up.doc") {
                             try? library.move(label.id, toFolder: nil)
                         }

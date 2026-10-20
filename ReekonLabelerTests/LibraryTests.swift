@@ -223,4 +223,17 @@ struct LibraryTests {
         #expect(try library.load(template) == twoBlockDocument)
         #expect(try library.labels(inFolder: nil).isEmpty)
     }
+
+    /// Codex review: an edit still waiting on the autosave names the template, not the label's old name.
+    @Test func templateTakesNameOfUnsavedEdit() throws {
+        let library = try makeLibrary()
+        let editor = makeEditor(library)
+        editor.newLabel()
+        editor.addText()
+        editor.setText("BINS", for: try #require(editor.selectedID))
+
+        editor.saveAsTemplate()
+
+        #expect(try library.templates().map(\.name) == ["BINS"])
+    }
 }

@@ -352,6 +352,8 @@ final class LabelEditor {
     /// Stores a copy of the current label as a template named like the label (S11).
     func saveAsTemplate() {
         guard let library else { return }
+        // An edit still waiting on the autosave would otherwise leave the label's old name.
+        saveNow()
         do {
             try library.saveTemplate(document, name: libraryName ?? LabelLibrary.name(for: document),
                                      thumbnailPNG: image.flatMap(PictureImport.pngData))
