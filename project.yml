@@ -1,0 +1,90 @@
+name: ReekonLabeler
+options:
+  bundleIdPrefix: com.rydersdesign
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    DEVELOPMENT_TEAM: ASH39KMW4S
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SDKROOT: iphoneos
+    SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+  configs:
+    Debug:
+      ENABLE_TESTABILITY: YES
+      ONLY_ACTIVE_ARCH: YES
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      GCC_OPTIMIZATION_LEVEL: "0"
+      DEBUG_INFORMATION_FORMAT: dwarf
+      GCC_PREPROCESSOR_DEFINITIONS: ["DEBUG=1", "$(inherited)"]
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      VALIDATE_PRODUCT: YES
+targets:
+  ReekonLabeler:
+    type: application
+    platform: iOS
+    sources:
+      - ReekonLabeler
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydersdesign.ReekonLabeler
+        PRODUCT_NAME: Labeler
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Labeler
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Labeler uses Bluetooth to print on your REEKON P1L."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  ReekonLabelerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ReekonLabelerTests
+    dependencies:
+      - target: ReekonLabeler
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: ReekonLabelerTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydersdesign.ReekonLabelerTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Labeler.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Labeler"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+  ReekonLabelerUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ReekonLabelerUITests
+    dependencies:
+      - target: ReekonLabeler
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_NAME: ReekonLabelerUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydersdesign.ReekonLabelerUITests
+        TEST_TARGET_NAME: ReekonLabeler
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+schemes:
+  ReekonLabeler:
+    build:
+      targets:
+        ReekonLabeler: all
+    test:
+      targets:
+        - ReekonLabelerTests
+        - ReekonLabelerUITests
