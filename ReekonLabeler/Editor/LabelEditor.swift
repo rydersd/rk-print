@@ -334,6 +334,32 @@ final class LabelEditor {
         }
     }
 
+    /// A new library label copied from template `id`, opened in place of the current label (S11).
+    func newLabel(fromTemplate id: UUID) {
+        guard let library else { return }
+        saveNow()
+        do {
+            guard let created = try library.createLabel(fromTemplate: id) else {
+                Self.log.error("Template is missing from the library")
+                return
+            }
+            load(created.document, libraryID: created.id, name: created.name)
+        } catch {
+            Self.log.error("Label from template failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Stores a copy of the current label as a template named like the label (S11).
+    func saveAsTemplate() {
+        guard let library else { return }
+        do {
+            try library.saveTemplate(document, name: libraryName ?? LabelLibrary.name(for: document),
+                                     thumbnailPNG: image.flatMap(PictureImport.pngData))
+        } catch {
+            Self.log.error("Save as template failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// The library deleted labels `ids`; if the open label is one of them, the editor starts a blank label
     /// that joins the library on its first edit.
     func libraryDeleted(_ ids: Set<UUID>) {

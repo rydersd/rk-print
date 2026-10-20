@@ -6,7 +6,7 @@ import Testing
 
 struct LibraryTests {
     private func makeLibrary(undo: UndoManager? = nil) throws -> LabelLibrary {
-        let container = try ModelContainer(for: SavedLabel.self,
+        let container = try ModelContainer(for: LabelLibrary.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         return LabelLibrary(context: ModelContext(container), undoManager: undo)
     }
@@ -125,5 +125,102 @@ struct LibraryTests {
         editor.saveNow()
         #expect(try library.load(second)?.elements.isEmpty == true)
         #expect(try library.load(first)?.elements.first?.textContent?.text == "ONE")
+    }
+
+    // MARK: S10 — label folders
+
+    private func undoable() -> UndoManager {
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        return undo
+    }
+
+    @Test func dropOnLabelMakesFolder() throws {
+        let library = try makeLibrary()
+        let a = try library.create(twoBlockDocument).id
+        let b = try library.create(LabelDocument()).id
+
+        try library.drop(b, onLabel: a)
+
+        let folders = try library.folders()
+        let folder = try #require(folders.first)
+        #expect(folders.count == 1)
+        #expect(folder.name == "Folder")
+        #expect(Set(try library.labels(inFolder: folder.id).map(\.id)) == [a, b])
+        #expect(try library.labels(inFolder: nil).isEmpty)
+    }
+
+    @Test func deleteFolderKeepingLabelsIsUndoable() throws {
+        let undo = undoable()
+        let library = try makeLibrary(undo: undo)
+        let a = try library.create(twoBlockDocument).id
+        let b = try library.create(LabelDocument()).id
+        try library.drop(b, onLabel: a)
+        let folder = try #require(try library.folders().first).id
+
+        let deleted = try library.deleteFolder(folder, keepingLabels: true)
+        #expect(deleted.isEmpty)
+        #expect(try library.folders().isEmpty)
+        #expect(Set(try library.labels(inFolder: nil).map(\.id)) == [a, b])
+
+        undo.undo()
+        #expect(try library.folders().map(\.id) == [folder])
+        #expect(Set(try library.labels(inFolder: folder).map(\.id)) == [a, b])
+        #expect(try library.labels(inFolder: nil).isEmpty)
+    }
+
+    @Test func deleteFolderAndLabelsIsUndoable() throws {
+        let undo = undoable()
+        let library = try makeLibrary(undo: undo)
+        let a = try library.create(twoBlockDocument).id
+        let b = try library.create(LabelDocument()).id
+        try library.drop(b, onLabel: a)
+        let folder = try #require(try library.folders().first).id
+
+        let deleted = try library.deleteFolder(folder, keepingLabels: false)
+        #expect(deleted == [a, b])
+        #expect(try library.folders().isEmpty)
+        #expect(try library.load(a) == nil)
+        #expect(try library.load(b) == nil)
+
+        undo.undo()
+        #expect(try library.folders().map(\.id) == [folder])
+        #expect(Set(try library.labels(inFolder: folder).map(\.id)) == [a, b])
+        #expect(try library.load(a) == twoBlockDocument)
+    }
+
+    // MARK: S11 — templates
+
+    @Test func labelFromTemplateLeavesTemplateUnchanged() throws {
+        let library = try makeLibrary()
+        let template = try library.saveTemplate(twoBlockDocument, name: "Shelf")
+        let before = try #require(try library.templates().first { $0.id == template }).documentJSON
+        let editor = makeEditor(library)
+
+        editor.newLabel(fromTemplate: template)
+        let label = try #require(editor.libraryID)
+        #expect(label != template)
+        #expect(editor.libraryName == "Shelf")
+        #expect(Set(editor.document.elements.map(\.id)).isDisjoint(with: twoBlockDocument.elements.map(\.id)))
+        editor.setText("CHANGED", for: editor.document.elements[0].id)
+        editor.saveNow()
+
+        #expect(try library.templates().first { $0.id == template }?.documentJSON == before)
+        #expect(try library.load(label)?.elements.first?.textContent?.text == "CHANGED")
+        #expect(try library.labels(inFolder: nil).map(\.id) == [label])
+    }
+
+    @Test func templateDeleteIsUndoable() throws {
+        let undo = undoable()
+        let library = try makeLibrary(undo: undo)
+        let template = try library.saveTemplate(twoBlockDocument, name: "Shelf")
+
+        try library.delete(template)
+        #expect(try library.templates().isEmpty)
+
+        undo.undo()
+        #expect(try library.templates().map(\.id) == [template])
+        #expect(try library.load(template) == twoBlockDocument)
+        #expect(try library.labels(inFolder: nil).isEmpty)
     }
 }

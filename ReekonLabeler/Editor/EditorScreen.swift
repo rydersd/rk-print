@@ -112,9 +112,17 @@ struct EditorScreen: View {
                 }
             }
             Spacer()
-            // Bottom bar: the top bar is full, and more there would collapse Add Text into the overflow menu.
-            Button("New Label", systemImage: "square.and.pencil") { editor.newLabel() }
-                .accessibilityIdentifier("newLabelButton")
+            // Bottom bar: the top bar is full, and more there (a title menu too) collapses Add Text into the
+            // overflow menu. Tap for a blank label; long-press to save this one as a template (S11).
+            Menu {
+                Button("Save as Template", systemImage: "doc.badge.plus") { editor.saveAsTemplate() }
+                    .accessibilityIdentifier("saveTemplateButton")
+            } label: {
+                Label("New Label", systemImage: "square.and.pencil")
+            } primaryAction: {
+                editor.newLabel()
+            }
+            .accessibilityIdentifier("newLabelButton")
             printButton
         }
     }
@@ -156,6 +164,7 @@ struct EditorScreen: View {
             LibraryView(library: library, openID: editor.libraryID,
                         open: { id, name, doc in editor.load(doc, libraryID: id, name: name) },
                         newLabel: { editor.newLabel() },
+                        newFromTemplate: { editor.newLabel(fromTemplate: $0) },
                         deleted: { editor.libraryDeleted($0) })
         }
     }

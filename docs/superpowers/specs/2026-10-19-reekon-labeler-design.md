@@ -358,7 +358,9 @@ Named tests:
 
 Test plan (RC): drag performance with many labels; dropping a label on itself; folders inside folders
 (not supported: dropping a folder on a label does nothing); VoiceOver alternative to drag ("Move to
-Folder" in the context menu).
+Folder" in the context menu). Added at build: drag and drop on the device (the drop targets are untested by automation);
+the "Drop here to move out of the folder" row and the "Move Out of Folder" menu inside a folder; the
+delete dialog's swipe and context-menu paths; folder rename.
 
 ### S11 — Templates
 
@@ -380,7 +382,10 @@ Named tests:
 - `LibraryTests.templateDeleteIsUndoable`: delete a template, undo, and it is back.
 
 Test plan (RC): template with pictures (size); template whose fonts are gone; editing a template itself
-(not supported in this story: replace it by saving a new one).
+(not supported in this story: replace it by saving a new one). Added at build: Save as Template sits in a long-press menu on the
+bottom bar's New Label, because a title menu or another top-bar button collapses Add Text into the
+overflow menu (seen in the UI test hierarchy); taste review of that placement and whether saving needs
+visible confirmation; template rename.
 
 ## Later (not in this spec)
 

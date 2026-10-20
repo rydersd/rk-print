@@ -13,7 +13,7 @@ struct ReekonLabelerApp: App {
     init() {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: isUITesting)
         do {
-            container = try ModelContainer(for: SavedLabel.self, configurations: configuration)
+            container = try ModelContainer(for: LabelLibrary.schema, configurations: configuration)
         } catch {
             // Without a store there is nowhere to keep labels; stop rather than silently lose them.
             Logger(subsystem: "tools.reekon.labeler", category: "app")

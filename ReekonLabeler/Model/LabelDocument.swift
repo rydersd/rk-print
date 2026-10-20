@@ -45,6 +45,21 @@ nonisolated struct LabelDocument: Codable, Hashable, Sendable {
         return Set(elements.filter { $0.groupID == group }.map(\.id))
     }
 
+    /// The same label with new element and group ids, so a copy (a label made from a template, S11) never
+    /// shares an id with its original. Groups stay together.
+    func withFreshIDs() -> LabelDocument {
+        var groups: [UUID: UUID] = [:]
+        var copy = self
+        for index in copy.elements.indices {
+            copy.elements[index].id = UUID()
+            if let group = copy.elements[index].groupID {
+                copy.elements[index].groupID = groups[group, default: UUID()]
+                groups[group] = copy.elements[index].groupID
+            }
+        }
+        return copy
+    }
+
     // Labels saved before S5–S7 store their text blocks under "blocks".
     private enum CodingKeys: String, CodingKey { case size, orientation, grid, elements, blocks }
 
