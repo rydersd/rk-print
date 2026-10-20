@@ -34,6 +34,7 @@ final class P1LPrinter: NSObject {
     private(set) var lastError: String?
 
     var isReady: Bool { if case .connected = state { true } else { false } }
+    var isPrinting: Bool { if case .printing = state { true } else { false } }
     var printerName: String? {
         switch state {
         case .connecting(let name), .connected(let name), .printing(let name): name
