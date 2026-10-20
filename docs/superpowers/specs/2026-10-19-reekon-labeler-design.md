@@ -254,6 +254,60 @@ Named tests:
 Test plan (RC): 180° and 270° on paper; rotated multi-line and centred text; typing into a rotated block
 (caret position); rotating a group larger than the label's short side; rotated blocks on a rotated label.
 
+### S7 — Add a picture from Photos
+
+Added 2026-10-20 on Ryder's request ("add pictures from phone, and rotate those as well"). Rulings:
+dither by default with a per-picture line-art switch; pictures and text group together.
+
+As Ryder, I add a picture from my photo library, place and scale it on the label, rotate it, and group it
+with text; the print shows it in black-and-white dots.
+
+Acceptance:
+1. **+ Picture** opens the system photo picker (no photo-library permission prompt). The picture is added
+   at the next free spot, selected, at most the printable width, keeping its proportions.
+2. A picture keeps its proportions. A corner handle and pinch scale it, and it stays inside the printable
+   area like text (snap and clamp apply).
+3. Pictures are printed **dithered** (error diffusion at the final dot size), so greys become dot
+   patterns. A per-picture **Line art** switch uses a hard black/white cut instead. A **Brightness** slider
+   shifts both. The canvas shows exactly the dots that print.
+4. Pictures rotate (S6), select, group with text, move, delete and undo (S5) like text blocks.
+5. Saved labels keep their pictures. A picture is stored once, downscaled so its longer side is at most
+   1024 px, in greyscale.
+
+Named tests:
+- `LabelRendererTests.ditheredGreyIsPartInk`: a uniform 60 %-brightness picture filling a frame prints
+  25–55 % of that frame's dots black when dithered, and 0 % in line art.
+- `LayoutEngineTests.pictureKeepsAspectWhenClamped`: a 2:1 picture scaled past the right edge stops at
+  the printable edge, still 2:1.
+- `LibraryTests.labelWithPictureRoundTrips`: a label with a picture and a text block saves and reopens
+  unchanged, including the picture's pixels.
+
+Test plan (RC): large HEIC and panorama photos (memory, time to add); transparent PNGs (transparency
+prints white); very small pictures scaled up; a picture rotated in a group on paper; ≤ 60 ms interaction
+while dragging a picture.
+
+### S8 — Crop a picture
+
+Added 2026-10-20 on Ryder's request (ruling: "crop in the app"). Split from S7 per §3a.
+
+As Ryder, I crop a picture when I add it, and can re-crop it later.
+
+Acceptance:
+1. After a picture is picked, a crop screen shows it with a free-aspect crop rectangle (corner and edge
+   handles, drag to move). **Done** adds the cropped picture; **Cancel** adds nothing.
+2. **Crop** in the inspector reopens the crop screen for the selected picture. The full original is kept,
+   so a later crop can widen again. Re-cropping keeps the picture's width on the label and refits it inside.
+3. Re-crop is undoable.
+
+Named tests:
+- `ImageElementTests.cropPrintsOnlyCroppedPart`: a picture whose left half is black and right half white,
+  cropped to its left half, prints every dot black inside its frame, and the frame is twice as tall as its
+  width relative to the uncropped picture.
+- `LabelEditorTests.recropIsUndoable`: re-crop, then undo, restores the previous crop rect and frame.
+
+Test plan (RC): crop of a rotated picture; crop to a sliver (minimum 2 mm on the label); re-crop inside a
+group.
+
 ## Later (not in this spec)
 
 - **Tape-measure field**: connect to a T1/T1M/T1R (SDK Section I), insert the received or live measurement
