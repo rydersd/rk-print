@@ -19,26 +19,37 @@ final class LabelEditor {
     private(set) var layouts: [UUID: ElementLayout] = [:]
     private(set) var bitmap: Bitmap
     private(set) var image: CGImage?
-    /// Set when the label was opened from (or saved to) the library.
-    var libraryID: UUID?
-    var libraryName: String?
+    /// The library entry this label saves to (S9). Nil only until the first edit of a label that is not in the
+    /// library yet: a fresh install, or after the open label was deleted from the library.
+    private(set) var libraryID: UUID?
+    private(set) var libraryName: String?
 
     @ObservationIgnored var undoManager: UndoManager?
     @ObservationIgnored private var gestureStart: LabelDocument?
+    @ObservationIgnored private let library: LabelLibrary?
+    /// Remembers the open label across launches; off for tests.
     @ObservationIgnored private let persistsWorkingLabel: Bool
     @ObservationIgnored private var persistTask: Task<Void, Never>?
+    /// The copy last written to the library, so opening a label does not rewrite it or bump its date.
+    @ObservationIgnored private var savedDocument: LabelDocument?
 
-    private static let workingLabelKey = "workingLabel"
-    /// Typing and drags change the label many times a second; the working copy is written after a pause.
-    private static let persistDelay = Duration.milliseconds(500)
+    /// The working label kept in UserDefaults before S9; moved into the library on first launch.
+    private static let legacyWorkingLabelKey = "workingLabel"
+    private static let openLabelKey = "openLabelID"
+    /// Typing and drags change the label many times a second; the library copy is written after a pause.
+    static let persistDelay = Duration.milliseconds(500)
     private static let log = Logger(subsystem: "tools.reekon.labeler", category: "editor")
 
-    init(document: LabelDocument? = nil, undoManager: UndoManager? = nil, persistsWorkingLabel: Bool = true) {
+    init(document: LabelDocument? = nil, undoManager: UndoManager? = nil, persistsWorkingLabel: Bool = true,
+         library: LabelLibrary? = nil) {
         self.persistsWorkingLabel = persistsWorkingLabel
-        let start = document ?? (persistsWorkingLabel ? Self.restoredWorkingLabel() : nil) ?? LabelDocument()
-        self.document = LayoutEngine.normalized(start)
+        self.library = library
+        self.document = LayoutEngine.normalized(document ?? LabelDocument())
         self.undoManager = undoManager
         self.bitmap = Bitmap(width: 0, height: 0)
+        if document == nil, persistsWorkingLabel { reopenLastLabel() }
+        // What the editor starts with is not an edit: a blank label joins the library on its first change.
+        if savedDocument == nil { savedDocument = self.document }
         refresh()
     }
 
@@ -296,17 +307,68 @@ final class LabelEditor {
         commit(doc, action: nil)
     }
 
-    /// Replaces the label, for example when opening one from the library. Undoable.
+    /// Opens a library label. Saves the current one first, and starts a fresh undo history: undoing past
+    /// the open would put the old label's content into the new label's library entry.
     func load(_ doc: LabelDocument, libraryID: UUID?, name: String?) {
+        saveNow()
         clearSelection()
-        commit(doc, action: "Open Label")
+        undoManager?.removeAllActions(withTarget: self)
+        document = LayoutEngine.normalized(doc)
+        savedDocument = document
         self.libraryID = libraryID
         libraryName = name
+        rememberOpenLabel()
+        refresh()
     }
 
+    /// A blank label with the current size and grid, added to the library at once (S9).
     func newLabel() {
+        let blank = LabelDocument(size: document.size, orientation: document.orientation, grid: document.grid)
+        do {
+            guard let library else { return load(blank, libraryID: nil, name: nil) }
+            saveNow()
+            let created = try library.create(blank)
+            load(blank, libraryID: created.id, name: created.name)
+        } catch {
+            Self.log.error("New label failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The library deleted labels `ids`; if the open label is one of them, the editor starts a blank label
+    /// that joins the library on its first edit.
+    func libraryDeleted(_ ids: Set<UUID>) {
+        guard let id = libraryID, ids.contains(id) else { return }
+        // Drop the deleted label's unsaved changes so load() does not save them back as a new label.
+        persistTask?.cancel()
+        savedDocument = document
+        libraryID = nil
         load(LabelDocument(size: document.size, orientation: document.orientation, grid: document.grid),
              libraryID: nil, name: nil)
+    }
+
+    /// Writes any pending change to the library now: the app is leaving the foreground, or another label opens.
+    func saveNow() {
+        persistTask?.cancel()
+        persistTask = nil
+        guard let library, document != savedDocument else { return }
+        let thumbnail = image.flatMap(PictureImport.pngData)
+        do {
+            if let id = libraryID {
+                guard let name = try library.autosave(document, id: id, thumbnailPNG: thumbnail) else {
+                    Self.log.error("Open label is missing from the library; not saved")
+                    return
+                }
+                libraryName = name
+            } else {
+                let created = try library.create(document, thumbnailPNG: thumbnail)
+                libraryID = created.id
+                libraryName = created.name
+                rememberOpenLabel()
+            }
+            savedDocument = document
+        } catch {
+            Self.log.error("Autosave failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: Internals
@@ -348,18 +410,45 @@ final class LabelEditor {
     }
 
     private func schedulePersist() {
-        guard persistsWorkingLabel else { return }
+        guard library != nil, document != savedDocument else { return }
         persistTask?.cancel()
-        let document = document
         persistTask = Task {
             try? await Task.sleep(for: Self.persistDelay)
-            guard !Task.isCancelled, let data = try? JSONEncoder().encode(document) else { return }
-            UserDefaults.standard.set(data, forKey: Self.workingLabelKey)
+            guard !Task.isCancelled else { return }
+            saveNow()
         }
     }
 
-    private static func restoredWorkingLabel() -> LabelDocument? {
-        guard let data = UserDefaults.standard.data(forKey: workingLabelKey) else { return nil }
-        return try? JSONDecoder().decode(LabelDocument.self, from: data)
+    private func rememberOpenLabel() {
+        guard persistsWorkingLabel else { return }
+        UserDefaults.standard.set(libraryID?.uuidString, forKey: Self.openLabelKey)
+    }
+
+    /// Opens the label that was open last time, or moves the pre-S9 working label into the library.
+    private func reopenLastLabel() {
+        guard let library else { return }
+        let defaults = UserDefaults.standard
+        if let text = defaults.string(forKey: Self.openLabelKey), let id = UUID(uuidString: text),
+           let doc = try? library.load(id) {
+            document = LayoutEngine.normalized(doc)
+            savedDocument = document
+            libraryID = id
+            libraryName = try? library.name(id)
+            return
+        }
+        guard let data = defaults.data(forKey: Self.legacyWorkingLabelKey),
+              let doc = try? JSONDecoder().decode(LabelDocument.self, from: data) else { return }
+        do {
+            let created = try library.create(doc)
+            document = LayoutEngine.normalized(doc)
+            savedDocument = document
+            libraryID = created.id
+            libraryName = created.name
+            rememberOpenLabel()
+            defaults.removeObject(forKey: Self.legacyWorkingLabelKey)
+            Self.log.info("Moved the working label into the library")
+        } catch {
+            Self.log.error("Moving the working label failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

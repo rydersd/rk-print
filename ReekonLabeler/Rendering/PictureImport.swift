@@ -36,7 +36,7 @@ nonisolated enum PictureImport {
         return PictureContent(pngData: png, pixelWidth: width, pixelHeight: height)
     }
 
-    private static func pngData(_ image: CGImage) -> Data? {
+    static func pngData(_ image: CGImage) -> Data? {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)
         else { return nil }

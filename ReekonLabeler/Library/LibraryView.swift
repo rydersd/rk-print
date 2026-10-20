@@ -2,10 +2,16 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-/// Saved labels, newest first. Tap to open, swipe to delete (undoable), long-press to rename.
+/// Every label, most recently edited first (S9). Tap to open, swipe to delete (undoable), long-press to
+/// rename. An empty library offers New Label.
 struct LibraryView: View {
     let library: LabelLibrary
+    /// The label open in the editor, marked in the list.
+    let openID: UUID?
     let open: (UUID, String, LabelDocument) -> Void
+    let newLabel: () -> Void
+    /// Tells the editor which labels were deleted, in case one is open.
+    let deleted: (Set<UUID>) -> Void
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \SavedLabel.modified, order: .reverse) private var labels: [SavedLabel]
     @State private var renaming: SavedLabel?
@@ -27,20 +33,32 @@ struct LibraryView: View {
                                 Text(label.modified, format: .relative(presentation: .named))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
+                            Spacer()
+                            if label.id == openID {
+                                Text("Open").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .accessibilityIdentifier("libraryLabel")
                     .contextMenu {
                         Button("Rename", systemImage: "pencil") { newName = label.name; renaming = label }
                     }
                 }
                 .onDelete { offsets in
-                    for id in offsets.map({ labels[$0].id }) { try? library.delete(id) }
+                    let ids = Set(offsets.map { labels[$0].id })
+                    for id in ids { try? library.delete(id) }
+                    deleted(ids)
                 }
             }
             .overlay {
                 if labels.isEmpty {
-                    ContentUnavailableView("No Saved Labels", systemImage: "tag",
-                                           description: Text("Save a label to reuse it."))
+                    ContentUnavailableView {
+                        Label("No Labels", systemImage: "tag")
+                    } description: {
+                        Text("Labels save here as you make them.")
+                    } actions: {
+                        newLabelButton.buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .navigationTitle("Library")
@@ -50,6 +68,10 @@ struct LibraryView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { library.undoManager?.undo() }
                 }
+                // The empty state has its own New Label; one per screen.
+                if !labels.isEmpty {
+                    ToolbarItem(placement: .bottomBar) { newLabelButton }
+                }
             }
             .alert("Rename Label", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                 TextField("Name", text: $newName)
@@ -57,6 +79,14 @@ struct LibraryView: View {
                 Button("Cancel", role: .cancel) {}
             }
         }
+    }
+
+    private var newLabelButton: some View {
+        Button("New Label", systemImage: "square.and.pencil") {
+            newLabel()
+            dismiss()
+        }
+        .accessibilityIdentifier("libraryNewLabelButton")
     }
 
     @ViewBuilder

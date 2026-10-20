@@ -67,4 +67,63 @@ struct LibraryTests {
         #expect(reopened == doc)
         #expect(reopened.elements[0].picture?.pngData == picture.pngData)
     }
+
+    // MARK: S9 — every label lives in the library
+
+    private func makeEditor(_ library: LabelLibrary, undo: UndoManager? = nil) -> LabelEditor {
+        LabelEditor(undoManager: undo, persistsWorkingLabel: false, library: library)
+    }
+
+    /// S9: New Label is in the library before any edit; an edit reaches it after the debounce, without Save,
+    /// and the name follows the first line of text.
+    @Test func editsSaveWithoutSave() async throws {
+        let library = try makeLibrary()
+        let editor = makeEditor(library)
+        editor.newLabel()
+        let id = try #require(editor.libraryID)
+        #expect(try library.load(id) == LabelDocument())
+
+        editor.addText()
+        editor.setText("SHELF A", for: try #require(editor.selectedID))
+        try await Task.sleep(for: LabelEditor.persistDelay * 2)
+        #expect(try library.load(id)?.elements.first?.textContent?.text == "SHELF A")
+        #expect(try library.name(id) == "SHELF A")
+    }
+
+    /// S9: a label renamed in the library keeps its name when its text changes.
+    @Test func renamedNameSurvivesEdits() throws {
+        let library = try makeLibrary()
+        let editor = makeEditor(library)
+        editor.newLabel()
+        editor.addText()
+        let element = try #require(editor.selectedID)
+        editor.setText("A", for: element)
+        editor.saveNow()
+        let id = try #require(editor.libraryID)
+
+        try library.rename(id, to: "Bins")
+        editor.setText("B", for: element)
+        editor.saveNow()
+        #expect(try library.name(id) == "Bins")
+        #expect(try library.load(id)?.elements.first?.textContent?.text == "B")
+    }
+
+    /// S9 data-loss guard: undo after opening another label never writes the first label into the second.
+    @Test func undoAfterOpeningNeverOverwritesOtherLabel() throws {
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        let library = try makeLibrary(undo: undo)
+        let editor = makeEditor(library, undo: undo)
+        editor.newLabel()
+        editor.addText()
+        editor.setText("ONE", for: try #require(editor.selectedID))
+        let first = try #require(editor.libraryID)
+
+        editor.newLabel()
+        let second = try #require(editor.libraryID)
+        if undo.canUndo { undo.undo() }
+        editor.saveNow()
+        #expect(try library.load(second)?.elements.isEmpty == true)
+        #expect(try library.load(first)?.elements.first?.textContent?.text == "ONE")
+    }
 }

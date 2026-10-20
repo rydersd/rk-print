@@ -1,20 +1,17 @@
 import os
 import PhotosUI
-import SwiftData
 import SwiftUI
-import UIKit
 
 /// The whole app on one screen: the label canvas, the selection's inspector, and the tools.
 struct EditorScreen: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    private let library: LabelLibrary
     @State private var editor: LabelEditor
     @State private var printer = P1LPrinter()
     @State private var undoManager: UndoManager
     @State private var canUndo = false
     @State private var canRedo = false
     @State private var sheet: Sheet?
-    @State private var saveName = ""
-    @State private var isNamingSave = false
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var cropping: CropRequest?
 
@@ -23,10 +20,12 @@ struct EditorScreen: View {
         var id: String { rawValue }
     }
 
-    init(persistsWorkingLabel: Bool) {
+    init(library: LabelLibrary, persistsWorkingLabel: Bool) {
         let undo = UndoManager()
+        self.library = library
         _undoManager = State(initialValue: undo)
-        _editor = State(initialValue: LabelEditor(undoManager: undo, persistsWorkingLabel: persistsWorkingLabel))
+        _editor = State(initialValue: LabelEditor(undoManager: undo, persistsWorkingLabel: persistsWorkingLabel,
+                                                  library: library))
     }
 
     var body: some View {
@@ -58,17 +57,18 @@ struct EditorScreen: View {
                 pickedPhoto = nil
                 Task { await importPhoto(item) }
             }
-            .alert("Save Label", isPresented: $isNamingSave) {
-                TextField("Name", text: $saveName)
-                Button("Save") { save() }
-                Button("Cancel", role: .cancel) {}
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerCheckpoint, object: undoManager)) { _ in
             canUndo = undoManager.canUndo
             canRedo = undoManager.canRedo
         }
-        .task { if printer.hasSavedPrinter { printer.activate() } }
+        .task {
+            // One undo history for the editor and the library, so the library's Undo also covers deletes.
+            library.undoManager = undoManager
+            if printer.hasSavedPrinter { printer.activate() }
+        }
+        // Don't lose the last half second of edits if the app is closed right after them.
+        .onChange(of: scenePhase) { _, phase in if phase != .active { editor.saveNow() } }
     }
 
     // MARK: Toolbar
@@ -112,12 +112,9 @@ struct EditorScreen: View {
                 }
             }
             Spacer()
-            // Beside Print: both send the label somewhere. Keeps the top bar to two leading items so
-            // Add Text and Add Picture never collapse into the overflow menu.
-            Button("Save", systemImage: "square.and.arrow.down") {
-                saveName = editor.libraryName ?? defaultName
-                isNamingSave = true
-            }
+            // Bottom bar: the top bar is full, and more there would collapse Add Text into the overflow menu.
+            Button("New Label", systemImage: "square.and.pencil") { editor.newLabel() }
+                .accessibilityIdentifier("newLabelButton")
             printButton
         }
     }
@@ -156,9 +153,10 @@ struct EditorScreen: View {
         case .printer:
             PrinterSheet(printer: printer)
         case .library:
-            LibraryView(library: LabelLibrary(context: modelContext, undoManager: undoManager)) { id, name, doc in
-                editor.load(doc, libraryID: id, name: name)
-            }
+            LibraryView(library: library, openID: editor.libraryID,
+                        open: { id, name, doc in editor.load(doc, libraryID: id, name: name) },
+                        newLabel: { editor.newLabel() },
+                        deleted: { editor.libraryDeleted($0) })
         }
     }
 
@@ -187,29 +185,6 @@ struct EditorScreen: View {
             var picture = request.picture
             picture.crop = crop
             editor.addPicture(picture)
-        }
-    }
-
-    // MARK: Saving
-
-    /// The first line of text, else "Label".
-    private var defaultName: String {
-        let first = editor.document.elements.lazy.compactMap(\.textContent?.text).first { !$0.isEmpty } ?? ""
-        let line = first.split(separator: "\n").first.map(String.init) ?? ""
-        return line.isEmpty ? "Label" : line
-    }
-
-    private func save() {
-        let name = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let library = LabelLibrary(context: modelContext)
-        let thumbnail = editor.image.flatMap { UIImage(cgImage: $0).pngData() }
-        do {
-            let id = try library.save(editor.document, name: name.isEmpty ? defaultName : name,
-                                      id: editor.libraryID, thumbnailPNG: thumbnail)
-            editor.libraryID = id
-            editor.libraryName = name.isEmpty ? defaultName : name
-        } catch {
-            Logger.editorUI.error("Save failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }
