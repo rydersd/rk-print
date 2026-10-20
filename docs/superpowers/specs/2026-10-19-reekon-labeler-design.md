@@ -197,6 +197,63 @@ Named tests:
 Test plan (RC): rename; duplicate names; many labels (scroll performance); fonts no longer installed;
 migration when the model changes.
 
+### S5 — Select several blocks and group them
+
+Added 2026-10-20 on Ryder's request ("select text(s) with a tap and group them"). Rulings: multi-select via
+a Select toggle; groups are lasting (saved with the label).
+
+As Ryder, I turn on Select, tap blocks to pick several, group them, and then move, scale and delete the
+group as one; Ungroup splits it again.
+
+Acceptance:
+1. A **Select** toggle in the toolbar. While on, each tap adds or removes a block from the selection and
+   no keyboard appears. Turning it off returns to tap-to-type. Tapping empty canvas clears the selection.
+2. With two or more blocks selected, **Group** joins them. The group is saved with the label.
+3. Outside Select mode, tapping any member selects the whole group. A drag moves every member by the same
+   amount, keeping their positions relative to each other; the drag stops when the group's outer edge meets
+   the printable edge. Pinch, and the inspector's font, weight, size and alignment, apply to every selected
+   block. The width handle shows only when a single ungrouped block is selected.
+4. Double-tapping a member edits that member's text.
+5. **Ungroup** splits the selected group. Delete removes every selected block. Both are undoable.
+
+Named tests:
+- `LabelEditorTests.groupMovesAsOneAndStopsAtEdge`: two grouped blocks 10 mm apart, dragged +100 mm, stay
+  10 mm apart and the rightmost member's right edge is at the printable edge.
+- `LabelEditorTests.deleteGroupIsUndoable`: delete a group, undo, and both blocks return with the same
+  group.
+- `EditorUITests.selectModeGroupsTwoBlocks`: add two blocks; in Select mode tap both and Group; Select off;
+  tapping one block selects both (the Ungroup button appears).
+
+Test plan (RC): group of three or more; group with blocks on both sides of the label; scaling a group until
+a member shrinks to fit; groups after a label-size change; VoiceOver in Select mode.
+
+### S6 — Rotate text 90°
+
+Added 2026-10-20 on Ryder's request ("then rotate 90 deg"). Ruling: each tap turns a quarter turn
+clockwise. This rotates the selected text, separately from the bottom bar's whole-label Rotate.
+
+As Ryder, I rotate a block or a group a quarter turn at a time so text can run up or down the label.
+
+Acceptance:
+1. **Rotate 90°** in the inspector turns the selection clockwise: 0° → 90° → 180° → 270° → 0°. A group
+   turns about its centre, so its layout turns with it.
+2. A rotated block's footprint (its frame turned 90° when at 90° or 270°) stays inside the printable area.
+   After a rotation the block or group is nudged back inside. Snapping and clamping apply to the footprint.
+   Shrink-to-fit measures available space along the rotated text's height direction.
+3. The canvas and the print show the rotated text, both from the same bitmap.
+4. Labels saved before this story open unchanged (no rotation, no group).
+
+Named tests:
+- `LabelRendererTests.rotatedBlockPrintsSideways`: a one-line block at 90° renders ink whose bounding box
+  is taller than it is wide, and every black dot lies inside the block's footprint.
+- `LayoutEngineTests.rotatingNearEdgeStaysInside`: a wide block against the right edge, rotated 90°, has
+  its footprint inside the printable area.
+- `LibraryTests.labelSavedBeforeRotationStillOpens`: S4-era JSON (no `rotation` or `groupID` keys) decodes
+  to blocks at 0° with no group.
+
+Test plan (RC): 180° and 270° on paper; rotated multi-line and centred text; typing into a rotated block
+(caret position); rotating a group larger than the label's short side; rotated blocks on a rotated label.
+
 ## Later (not in this spec)
 
 - **Tape-measure field**: connect to a T1/T1M/T1R (SDK Section I), insert the received or live measurement
