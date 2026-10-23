@@ -15,7 +15,7 @@ struct P1LPrinterTests {
     @Test func chunksArePacedAndSized() async throws {
         var bitmap = Bitmap(width: 384, height: 240)
         for i in bitmap.dots.indices where (i + i / 384) % 3 == 0 { bitmap.dots[i] = 1 } // diagonal: adjacent rows differ
-        let job = PrintJobEncoder.encode(bitmap)
+        let job = try PrintJobEncoder.encode(bitmap)
         #expect(job.data.count > 180 * 3)
 
         let transport = RecordingTransport()

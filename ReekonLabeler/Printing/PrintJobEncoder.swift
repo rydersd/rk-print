@@ -21,7 +21,8 @@ enum PrintJobEncoder {
         return document.orientation == .rotated ? bitmap.rotatedClockwise() : bitmap
     }
 
-    static func encode(_ bitmap: Bitmap) -> PrintJob {
+    /// Throws `PrinterError.jobTooLarge` rather than send a job whose length Header 2 cannot hold.
+    static func encode(_ bitmap: Bitmap) throws -> PrintJob {
         let rowBytes = min(headBytes, (bitmap.width + 7) / 8)
         var rows = (0..<bitmap.height).map { packedRow(bitmap, y: $0, bytes: rowBytes) }
         rows += Array(repeating: [UInt8](repeating: 0, count: rowBytes), count: trailingWhiteRows)
@@ -35,7 +36,8 @@ enum PrintJobEncoder {
             y += count
         }
 
-        let height = UInt16(clamping: rows.count), length = UInt16(clamping: data.count)
+        guard let length = UInt16(exactly: data.count) else { throw PrinterError.jobTooLarge }
+        let height = UInt16(clamping: rows.count)
         let header2: [UInt8] = [0x3a, UInt8(headBytes), UInt8(height & 0xff), UInt8(height >> 8),
                                 UInt8(length & 0xff), UInt8(length >> 8), 0x00, 0x05]
         return PrintJob(header1: header1, header2: header2, data: data)

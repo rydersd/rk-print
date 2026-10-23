@@ -1,3 +1,4 @@
+import os
 import SwiftData
 import SwiftUI
 import UIKit
@@ -173,10 +174,22 @@ struct LibraryView: View {
         dismiss()
     }
 
+    /// Tells the editor only about labels that were really deleted: a failed delete leaves the label in
+    /// the library, and the editor must keep it open with its unsaved edits.
     private func delete(_ ids: [UUID]) {
-        for id in ids { try? library.delete(id) }
-        deleted(Set(ids))
+        let gone = ids.filter { id in
+            do {
+                try library.delete(id)
+                return true
+            } catch {
+                Self.log.error("Delete failed: \(error.localizedDescription, privacy: .public)")
+                return false
+            }
+        }
+        deleted(Set(gone))
     }
+
+    private static let log = Logger(subsystem: "tools.reekon.labeler", category: "library")
 
     private var newLabelButton: some View {
         Button("New Label", systemImage: "square.and.pencil") {

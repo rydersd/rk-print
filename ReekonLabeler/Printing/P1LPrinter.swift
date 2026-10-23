@@ -10,8 +10,15 @@ struct DiscoveredPrinter: Identifiable, Hashable {
 
 enum PrinterError: LocalizedError {
     case notConnected
+    /// The job's data is longer than Header 2's 16-bit length can say.
+    case jobTooLarge
 
-    var errorDescription: String? { "The printer is not connected." }
+    var errorDescription: String? {
+        switch self {
+        case .notConnected: "The printer is not connected."
+        case .jobTooLarge: "This label has too much detail to print. Try a shorter label or a smaller photo."
+        }
+    }
 }
 
 /// The REEKON P1L over Bluetooth LE (SDK Section II). Finds printers, keeps the chosen one connected,
@@ -108,8 +115,8 @@ final class P1LPrinter: NSObject {
         guard case .connected(let name) = state, !isCoolingDown else { return }
         state = .printing(name)
         lastError = nil
-        let job = PrintJobEncoder.encode(PrintJobEncoder.headBitmap(for: document))
         do {
+            let job = try PrintJobEncoder.encode(PrintJobEncoder.headBitmap(for: document))
             try await sender.send(job, feedMM: document.size.feedMM)
             Self.log.info("Sent label: \(job.data.count) data bytes, \(document.size.displayName, privacy: .public)")
             if case .printing = state { state = .connected(name) }
