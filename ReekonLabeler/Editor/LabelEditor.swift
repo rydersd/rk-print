@@ -179,7 +179,7 @@ final class LabelEditor {
                                             y: LayoutEngine.clamp($0.y, inside.minY, inside.maxY)) }
         guard !stroke.isEmpty else { return }
         var doc = document
-        var strokes = [stroke], penWidth = pen, id = UUID(), groupID: UUID?
+        var strokes = [stroke], penWidth = pen, id = UUID(), groupID: UUID?, joinedIndex: Int?
         if let last = lastStroke, start - last.endedAt <= Self.strokeJoinInterval,
            let index = doc.index(of: last.scribbleID), let joined = doc.elements[index].scribble,
            doc.elements[index].rotation == .none {
@@ -191,11 +191,13 @@ final class LabelEditor {
             penWidth = joined.penWidthMM * scale
             id = element.id
             groupID = element.groupID
-            doc.elements.remove(at: index)
+            joinedIndex = index
         }
         guard let fitted = ScribbleContent.fitting(strokes, penWidthMM: penWidth) else { return }
-        doc.elements.append(LabelElement(id: id, originMM: fitted.originMM, widthMM: fitted.content.sizeMM.width,
-                                         groupID: groupID, content: .scribble(fitted.content)))
+        let scribble = LabelElement(id: id, originMM: fitted.originMM, widthMM: fitted.content.sizeMM.width,
+                                    groupID: groupID, content: .scribble(fitted.content))
+        // A joined scribble keeps its place front to back; a new one goes on top.
+        if let joinedIndex { doc.elements[joinedIndex] = scribble } else { doc.elements.append(scribble) }
         commit(doc, action: "Draw")
         lastStroke = (id, end)
     }
@@ -522,13 +524,12 @@ final class LabelEditor {
         guard let library, document != savedDocument else { return }
         let thumbnail = thumbnailPNG
         do {
-            if let id = libraryID {
-                guard let name = try library.autosave(document, id: id, thumbnailPNG: thumbnail) else {
-                    Self.log.error("Open label is missing from the library; not saved")
-                    return
-                }
+            if let id = libraryID, let name = try library.autosave(document, id: id, thumbnailPNG: thumbnail) {
                 libraryName = name
             } else {
+                // New, or deleted behind the editor's back (Redo of a library delete): save it as a new label
+                // rather than drop the edits.
+                if libraryID != nil { Self.log.error("Open label is missing from the library; saving it again") }
                 let created = try library.create(document, thumbnailPNG: thumbnail)
                 libraryID = created.id
                 libraryName = created.name

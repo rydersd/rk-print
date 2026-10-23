@@ -108,6 +108,24 @@ struct LibraryTests {
         #expect(try library.load(id)?.elements.first?.textContent?.text == "B")
     }
 
+    /// S9 data-loss guard: the open label deleted behind the editor's back (Redo of a library delete) is
+    /// saved again rather than its edits dropped.
+    @Test func openLabelDeletedElsewhereStillSaves() throws {
+        let library = try makeLibrary()
+        let editor = makeEditor(library)
+        editor.newLabel()
+        editor.addText()
+        let element = try #require(editor.selectedID)
+        editor.setText("A", for: element)
+        editor.saveNow()
+        try library.delete(try #require(editor.libraryID))
+
+        editor.setText("KEEP", for: element)
+        editor.saveNow()
+        let id = try #require(editor.libraryID)
+        #expect(try library.load(id)?.elements.first?.textContent?.text == "KEEP")
+    }
+
     /// S9 data-loss guard: undo after opening another label never writes the first label into the second.
     @Test func undoAfterOpeningNeverOverwritesOtherLabel() throws {
         let undo = UndoManager()

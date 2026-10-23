@@ -5,6 +5,8 @@ import SwiftUI
 struct CanvasView: View {
     let editor: LabelEditor
     @State private var isPinching = false
+    /// Reset by SwiftUI when the pinch is cancelled, which skips `onEnded` (see ElementOverlay).
+    @GestureState private var pinchLive = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -37,6 +39,7 @@ struct CanvasView: View {
             .overlay { RoundedRectangle(cornerRadius: 1.5 * scale).strokeBorder(Theme.labelEdge) }
             .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
             .gesture(pinch)
+            .onChange(of: pinchLive) { _, live in if !live { endPinch() } }
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             .contentShape(.rect)
             .onTapGesture { location in
@@ -92,15 +95,19 @@ struct CanvasView: View {
     /// Pinch anywhere on the label scales the selection: text size, or picture width.
     private var pinch: some Gesture {
         MagnifyGesture()
+            .updating($pinchLive) { _, live, _ in live = true }
             .onChanged { value in
                 guard !editor.selection.isEmpty else { return }
                 if !isPinching { isPinching = true; editor.beginGesture() }
                 editor.scaleSelection(by: value.magnification)
             }
-            .onEnded { _ in
-                isPinching = false
-                editor.endGesture(action: "Scale")
-            }
+            .onEnded { _ in endPinch() }
+    }
+
+    private func endPinch() {
+        guard isPinching else { return }
+        isPinching = false
+        editor.endGesture(action: "Scale")
     }
 }
 
@@ -111,6 +118,9 @@ private struct DrawSurface: View {
     let scale: Double
     @State private var stroke: [CGPoint] = []
     @State private var startedAt: TimeInterval = 0
+    /// Reset by SwiftUI when the stroke ends or is cancelled (which skips `onEnded`); either way the stroke is
+    /// added once, so it neither vanishes nor joins the next one.
+    @GestureState private var strokeLive = false
 
     /// Points closer than this to the last one add nothing a 203 dpi print could show.
     private static let minimumStepMM = 0.2
@@ -129,20 +139,25 @@ private struct DrawSurface: View {
         }
         .contentShape(.rect)
         .gesture(draw)
+        .onChange(of: strokeLive) { _, live in if !live { finishStroke() } }
         .accessibilityIdentifier("drawSurface")
     }
 
     private var draw: some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($strokeLive) { _, live, _ in live = true }
             .onChanged { value in
                 let point = CGPoint(x: value.location.x / scale, y: value.location.y / scale)
                 if stroke.isEmpty { startedAt = ProcessInfo.processInfo.systemUptime }
                 if let last = stroke.last, hypot(point.x - last.x, point.y - last.y) < Self.minimumStepMM { return }
                 stroke.append(point)
             }
-            .onEnded { _ in
-                editor.addStroke(stroke, startedAt: startedAt, endedAt: ProcessInfo.processInfo.systemUptime)
-                stroke = []
-            }
+            .onEnded { _ in finishStroke() }
+    }
+
+    private func finishStroke() {
+        guard !stroke.isEmpty else { return }
+        editor.addStroke(stroke, startedAt: startedAt, endedAt: ProcessInfo.processInfo.systemUptime)
+        stroke = []
     }
 }

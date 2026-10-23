@@ -13,6 +13,10 @@ struct ElementOverlay: View {
     /// The tool the current drag started in, so its undo step is named for what it did.
     @State private var dragScales = false
     @State private var isResizing = false
+    /// True while a drag or resize is live. SwiftUI resets it when a gesture is cancelled (a call, Notification
+    /// Center, the tool changing mid-drag), which never reaches `onEnded`; the reset ends the undo step instead.
+    @GestureState private var dragLive = false
+    @GestureState private var resizeLive = false
     @FocusState private var isFocused: Bool
 
     private var layout: ElementLayout? { editor.layouts[element.id] }
@@ -47,6 +51,8 @@ struct ElementOverlay: View {
         .onTapGesture { editor.tap(element.id) }
         // Only the Adjust tools arrange things (S13); in Type a drag on text belongs to the text field.
         .gesture(move, isEnabled: editor.tool.selects)
+        .onChange(of: dragLive) { _, live in if !live { endDrag() } }
+        .onChange(of: resizeLive) { _, live in if !live { endResize() } }
     }
 
     private var accessibilityText: String {
@@ -100,6 +106,7 @@ struct ElementOverlay: View {
 
     private var move: some Gesture {
         DragGesture(minimumDistance: 4)
+            .updating($dragLive) { _, live, _ in live = true }
             .onChanged { value in
                 if !isDragging {
                     isDragging = true
@@ -114,23 +121,30 @@ struct ElementOverlay: View {
                     editor.moveSelection(grabbing: element.id, translationMM: translation)
                 }
             }
-            .onEnded { _ in
-                isDragging = false
-                editor.endGesture(action: dragScales ? "Scale" : "Move")
-            }
+            .onEnded { _ in endDrag() }
+    }
+
+    private func endDrag() {
+        guard isDragging else { return }
+        isDragging = false
+        editor.endGesture(action: dragScales ? "Scale" : "Move")
     }
 
     private var resize: some Gesture {
         DragGesture(minimumDistance: 1)
+            .updating($resizeLive) { _, live, _ in live = true }
             .onChanged { value in
                 if !isResizing { isResizing = true; editor.beginGesture() }
                 let along = element.rotation.isSideways ? value.translation.height : value.translation.width
                 editor.resizeElement(element.id, deltaMM: along / scale)
             }
-            .onEnded { _ in
-                isResizing = false
-                editor.endGesture(action: element.isText ? "Resize Text" : "Resize Picture")
-            }
+            .onEnded { _ in endResize() }
+    }
+
+    private func endResize() {
+        guard isResizing else { return }
+        isResizing = false
+        editor.endGesture(action: element.isText ? "Resize Text" : "Resize Picture")
     }
 
     private func ink(in frameMM: CGRect) -> Int {
