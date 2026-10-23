@@ -58,12 +58,40 @@ nonisolated struct TextContent: Codable, Hashable, Sendable {
     }
 }
 
+/// Finger strokes drawn in one go (S14). Points are mm from the top-left of the strokes' bounds, pen
+/// included, at the size they were drawn; the element's width scales them.
+nonisolated struct ScribbleContent: Codable, Hashable, Sendable {
+    var strokes: [[CGPoint]]
+    var sizeMM: CGSize
+    /// At `sizeMM`; it scales with the scribble.
+    var penWidthMM: Double
+
+    static let penWidthMM = 0.75
+
+    var aspect: Double { sizeMM.height / sizeMM.width }
+
+    /// A scribble of `strokes` given in label mm, and where its top-left sits on the label. The box is the
+    /// strokes' bounds plus half the pen on every side, widened to the minimum element width if need be.
+    static func fitting(_ strokes: [[CGPoint]], penWidthMM: Double) -> (content: ScribbleContent, originMM: CGPoint)? {
+        let points = strokes.flatMap { $0 }
+        guard let first = points.first else { return nil }
+        var bounds = points.dropFirst().reduce(CGRect(origin: first, size: .zero)) { $0.union(CGRect(origin: $1, size: .zero)) }
+        bounds = bounds.insetBy(dx: -penWidthMM / 2, dy: -penWidthMM / 2)
+        if bounds.width < LabelElement.minimumWidthMM {
+            bounds = bounds.insetBy(dx: -(LabelElement.minimumWidthMM - bounds.width) / 2, dy: 0)
+        }
+        let local = strokes.map { $0.map { CGPoint(x: $0.x - bounds.minX, y: $0.y - bounds.minY) } }
+        return (ScribbleContent(strokes: local, sizeMM: bounds.size, penWidthMM: penWidthMM), bounds.origin)
+    }
+}
+
 nonisolated enum ElementContent: Codable, Hashable, Sendable {
     case text(TextContent)
     case picture(PictureContent)
+    case scribble(ScribbleContent)
 }
 
-/// One thing on the label: text or a picture. `originMM` is the top-left of its footprint (the box it
+/// One thing on the label: text, a picture or a scribble. `originMM` is the top-left of its footprint (the box it
 /// covers once rotated); `widthMM` is the unrotated content width. Both are label-space mm.
 nonisolated struct LabelElement: Codable, Hashable, Sendable, Identifiable {
     var id = UUID()
@@ -95,7 +123,21 @@ nonisolated struct LabelElement: Codable, Hashable, Sendable, Identifiable {
         set { if let newValue, case .picture = content { content = .picture(newValue) } }
     }
 
+    var scribble: ScribbleContent? {
+        get { if case .scribble(let scribble) = content { scribble } else { nil } }
+        set { if let newValue, case .scribble = content { content = .scribble(newValue) } }
+    }
+
     var isText: Bool { textContent != nil }
+
+    /// Height ÷ width for content that keeps its proportions (pictures and scribbles); nil for text.
+    var aspect: Double? {
+        switch content {
+        case .text: nil
+        case .picture(let picture): picture.aspect
+        case .scribble(let scribble): scribble.aspect
+        }
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id, originMM, widthMM, rotation, groupID, content

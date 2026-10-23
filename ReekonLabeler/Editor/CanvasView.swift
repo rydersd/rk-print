@@ -29,6 +29,8 @@ struct CanvasView: View {
                 ForEach(Array(editor.document.elements.enumerated()), id: \.element.id) { index, element in
                     ElementOverlay(editor: editor, element: element, index: index, scale: scale)
                 }
+                // Above the elements, so drawing works over a photo (S14).
+                if editor.tool == .draw { DrawSurface(editor: editor, scale: scale) }
             }
             .frame(width: size.width, height: size.height)
             .clipShape(.rect(cornerRadius: 1.5 * scale))
@@ -98,6 +100,49 @@ struct CanvasView: View {
             .onEnded { _ in
                 isPinching = false
                 editor.endGesture(action: "Scale")
+            }
+    }
+}
+
+/// Draw (S14): a finger drag draws a stroke, shown live as a path and added to the label when the finger
+/// lifts, where the bitmap takes over.
+private struct DrawSurface: View {
+    let editor: LabelEditor
+    let scale: Double
+    @State private var stroke: [CGPoint] = []
+    @State private var startedAt: TimeInterval = 0
+
+    /// Points closer than this to the last one add nothing a 203 dpi print could show.
+    private static let minimumStepMM = 0.2
+
+    var body: some View {
+        Canvas { context, _ in
+            guard let first = stroke.first else { return }
+            var path = Path()
+            path.move(to: CGPoint(x: first.x * scale, y: first.y * scale))
+            for point in stroke.count > 1 ? Array(stroke.dropFirst()) : [first] {
+                path.addLine(to: CGPoint(x: point.x * scale, y: point.y * scale))
+            }
+            context.stroke(path, with: .color(Theme.ink),
+                           style: StrokeStyle(lineWidth: ScribbleContent.penWidthMM * scale, lineCap: .round,
+                                              lineJoin: .round))
+        }
+        .contentShape(.rect)
+        .gesture(draw)
+        .accessibilityIdentifier("drawSurface")
+    }
+
+    private var draw: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let point = CGPoint(x: value.location.x / scale, y: value.location.y / scale)
+                if stroke.isEmpty { startedAt = ProcessInfo.processInfo.systemUptime }
+                if let last = stroke.last, hypot(point.x - last.x, point.y - last.y) < Self.minimumStepMM { return }
+                stroke.append(point)
+            }
+            .onEnded { _ in
+                editor.addStroke(stroke, startedAt: startedAt, endedAt: ProcessInfo.processInfo.systemUptime)
+                stroke = []
             }
     }
 }

@@ -68,6 +68,25 @@ nonisolated enum LabelRenderer {
             guard let dots = PictureRasterizer.dots(for: picture, width: Int(contentWidth), height: Int(contentHeight))
             else { return }
             context.draw(dots, in: content)
+        case .scribble(let scribble):
+            // Points are mm down from the top-left; Core Graphics y runs up from the bottom.
+            let dotsPerUnit = contentWidth / scribble.sizeMM.width
+            func point(_ p: CGPoint) -> CGPoint {
+                CGPoint(x: content.minX + p.x * dotsPerUnit, y: content.maxY - p.y * dotsPerUnit)
+            }
+            let path = CGMutablePath()
+            for stroke in scribble.strokes {
+                guard let first = stroke.first else { continue }
+                path.move(to: point(first))
+                // A tap is a one-point stroke; a zero-length line with round caps prints it as a dot.
+                for p in stroke.count > 1 ? Array(stroke.dropFirst()) : [first] { path.addLine(to: point(p)) }
+            }
+            context.setStrokeColor(gray: 0, alpha: 1)
+            context.setLineWidth(scribble.penWidthMM * dotsPerUnit)
+            context.setLineCap(.round)
+            context.setLineJoin(.round)
+            context.addPath(path)
+            context.strokePath()
         }
     }
 }

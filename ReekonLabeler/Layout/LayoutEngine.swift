@@ -8,7 +8,7 @@ nonisolated struct ElementLayout: Equatable, Sendable {
     var frameMM: CGRect
     /// The content's own size before rotation (width along its text lines or picture width).
     var contentSizeMM: CGSize
-    /// For text, the size actually drawn; 0 for pictures.
+    /// For text, the size actually drawn; 0 for pictures and scribbles.
     var effectivePointSize: Double
 }
 
@@ -44,9 +44,9 @@ nonisolated enum LayoutEngine {
             pointSize = fittedPointSize(for: text, widthMM: width, availableMM: crossMax - top)
             height = textHeightMM(text, pointSize: pointSize, widthMM: width)
             crossPosition = height >= crossMax - crossMin ? crossMin : clamp(top, crossMin, crossMax - height)
-        case .picture(let picture):
-            // Keep proportions: a picture too tall for the cross space narrows instead.
-            let aspect = picture.aspect
+        case .picture, .scribble:
+            // Keep proportions: a picture or scribble too tall for the cross space narrows instead.
+            let aspect = element.aspect ?? 1
             if width * aspect > crossMax - crossMin { width = (crossMax - crossMin) / aspect }
             height = width * aspect
             pointSize = 0

@@ -3,12 +3,12 @@ import Foundation
 import Observation
 import os
 
-/// What a finger does on the canvas (S13). Type makes text; Move and Scale select and arrange.
+/// What a finger does on the canvas (S13). Type and Draw make things; Move and Scale select and arrange.
 enum EditorTool: CaseIterable {
-    case type, move, scale
+    case type, draw, move, scale
 
     /// Move and Scale: taps add or remove elements from the selection and never start typing.
-    var selects: Bool { self != .type }
+    var selects: Bool { self == .move || self == .scale }
 }
 
 /// The label being edited. Every change goes through here so it is kept inside the label, re-rendered,
@@ -41,6 +41,8 @@ final class LabelEditor {
     @ObservationIgnored private var savedDocument: LabelDocument?
     /// The stock colour chosen last, which new labels start with (S16).
     @ObservationIgnored private var lastStock = LabelStock.white
+    /// The scribble the last stroke went into and when that stroke ended (S14).
+    @ObservationIgnored private var lastStroke: (scribbleID: UUID, endedAt: TimeInterval)?
 
     /// The working label kept in UserDefaults before S9; moved into the library on first launch.
     private static let legacyWorkingLabelKey = "workingLabel"
@@ -125,7 +127,8 @@ final class LabelEditor {
     /// Moving to Move or Scale starts with nothing selected, so the block just typed in is not toggled off
     /// by the first tap meant to add it (S5).
     func setTool(_ newTool: EditorTool) {
-        if newTool.selects && !tool.selects { selection = [] }
+        // Draw has nothing selected, so the inspector does not cover the label while drawing (S14).
+        if (newTool.selects && !tool.selects) || newTool == .draw { selection = [] }
         tool = newTool
         editingID = nil
     }
@@ -163,6 +166,41 @@ final class LabelEditor {
         selection = [element.id]
         editingID = nil
     }
+
+    /// A stroke drawn in Draw (S14), as points in label mm. It joins the last stroke's scribble when it
+    /// starts within `strokeJoinInterval` of that stroke ending; otherwise it starts a new scribble. Times
+    /// are seconds on any one clock. Each stroke is one undo step.
+    func addStroke(_ pointsMM: [CGPoint], startedAt start: TimeInterval, endedAt end: TimeInterval) {
+        let printable = document.geometry.printableRect
+        let pen = ScribbleContent.penWidthMM
+        // Kept on the label: points stay a half pen inside the printable area.
+        let inside = printable.insetBy(dx: pen / 2, dy: pen / 2)
+        let stroke = pointsMM.map { CGPoint(x: LayoutEngine.clamp($0.x, inside.minX, inside.maxX),
+                                            y: LayoutEngine.clamp($0.y, inside.minY, inside.maxY)) }
+        guard !stroke.isEmpty else { return }
+        var doc = document
+        var strokes = [stroke], penWidth = pen, id = UUID(), groupID: UUID?
+        if let last = lastStroke, start - last.endedAt <= Self.strokeJoinInterval,
+           let index = doc.index(of: last.scribbleID), let joined = doc.elements[index].scribble,
+           doc.elements[index].rotation == .none {
+            // Back to label mm at the scribble's current place and size, then refit around every stroke.
+            let element = doc.elements[index]
+            let scale = element.widthMM / joined.sizeMM.width
+            strokes = joined.strokes.map { $0.map { CGPoint(x: element.originMM.x + $0.x * scale,
+                                                             y: element.originMM.y + $0.y * scale) } } + strokes
+            penWidth = joined.penWidthMM * scale
+            id = element.id
+            groupID = element.groupID
+            doc.elements.remove(at: index)
+        }
+        guard let fitted = ScribbleContent.fitting(strokes, penWidthMM: penWidth) else { return }
+        doc.elements.append(LabelElement(id: id, originMM: fitted.originMM, widthMM: fitted.content.sizeMM.width,
+                                         groupID: groupID, content: .scribble(fitted.content)))
+        commit(doc, action: "Draw")
+        lastStroke = (id, end)
+    }
+
+    static let strokeJoinInterval: TimeInterval = 1
 
     func deleteSelected() {
         guard !selection.isEmpty else { return }
@@ -304,7 +342,7 @@ final class LabelEditor {
     }
 
     /// Pinch or Scale drag: text changes point size (and a fixed width with it, so lines break the same),
-    /// pictures change width, measured from the gesture's start.
+    /// pictures and scribbles change width, measured from the gesture's start.
     func scaleSelection(by factor: Double) {
         let base = gestureStart ?? document
         var doc = document
@@ -319,7 +357,7 @@ final class LabelEditor {
                     doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
                                                       LayoutEngine.snap(start.widthMM * factor, base.grid))
                 }
-            case .picture:
+            case .picture, .scribble:
                 doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
                                                   LayoutEngine.snap(start.widthMM * factor, base.grid))
             }

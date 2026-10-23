@@ -48,7 +48,9 @@ struct ElementOverlay: View {
         .gesture(move)
     }
 
-    private var accessibilityText: String { element.textContent?.text ?? "picture" }
+    private var accessibilityText: String {
+        element.textContent?.text ?? (element.scribble != nil ? "scribble" : "picture")
+    }
 
     /// Inline editor sized and turned to match the rendered text, so the caret sits on the printed glyphs.
     private func field(_ text: TextContent) -> some View {

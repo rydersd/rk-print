@@ -80,7 +80,7 @@ struct EditorScreen: View {
         // The tools are in the top bar so they stay reachable while the keyboard covers the bottom bar (S13).
         ToolbarItemGroup(placement: .topBarLeading) {
             Button("Library", systemImage: "books.vertical") { sheet = .library }
-            toolMenu("Input", tools: [.type], showsPhoto: true)
+            toolMenu("Input", tools: [.type, .draw], showsPhoto: true)
                 .accessibilityIdentifier("inputMenu")
             toolMenu("Adjust", tools: [.move, .scale], showsPhoto: false)
                 .accessibilityIdentifier("adjustMenu")
@@ -119,8 +119,8 @@ struct EditorScreen: View {
         }
     }
 
-    /// A dropdown of tools (S13). Its icon is the current tool when that tool is in this menu, filled so
-    /// the active menu stands out; otherwise the menu's first tool, outlined.
+    /// A dropdown of tools (S13). Its icon is the current tool when that tool is in this menu, tinted so
+    /// the active menu stands out; otherwise the menu's first tool.
     private func toolMenu(_ title: String, tools: [EditorTool], showsPhoto: Bool) -> some View {
         let isActive = tools.contains(editor.tool)
         let shown = isActive ? editor.tool : tools[0]
@@ -134,7 +134,7 @@ struct EditorScreen: View {
             }
         } label: {
             Label(title, systemImage: shown.systemImage)
-                .symbolVariant(isActive ? .circle.fill : .none)
+                .foregroundStyle(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
         }
         .accessibilityValue(isActive ? shown.title : "")
     }
@@ -215,6 +215,7 @@ extension EditorTool {
     var title: String {
         switch self {
         case .type: "Type"
+        case .draw: "Draw"
         case .move: "Move"
         case .scale: "Scale"
         }
@@ -223,6 +224,7 @@ extension EditorTool {
     var systemImage: String {
         switch self {
         case .type: "character.cursor.ibeam"
+        case .draw: "scribble"
         case .move: "arrow.up.and.down.and.arrow.left.and.right"
         case .scale: "arrow.up.left.and.arrow.down.right"
         }

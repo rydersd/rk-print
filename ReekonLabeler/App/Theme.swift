@@ -9,6 +9,8 @@ enum Theme {
     static let labelEdge = Color(.separator)
     static let unprintableHatch = Color(.systemGray3)
     static let gridDot = Color(.systemGray2)
+    /// A stroke being drawn, before the bitmap shows it (S14): what the printer prints.
+    static let ink = Color.black
     static let selection = Color.accentColor
     static let handle = Color.accentColor
     /// Covers the part of a picture the crop will cut away.

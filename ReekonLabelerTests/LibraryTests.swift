@@ -253,4 +253,18 @@ struct LibraryTests {
         let old = try JSONDecoder().decode(LabelDocument.self, from: Data(s15JSON.utf8))
         #expect(old.stock == .white)
     }
+
+    // MARK: S14 — scribbles
+
+    @Test func scribbleRoundTrips() throws {
+        let editor = LabelEditor(document: twoBlockDocument, undoManager: nil, persistsWorkingLabel: false)
+        editor.setTool(.draw)
+        editor.addStroke([CGPoint(x: 5.25, y: 6.5), CGPoint(x: 18.125, y: 9.75)], startedAt: 0, endedAt: 0.4)
+        let doc = editor.document
+        #expect(doc.elements.contains { $0.scribble != nil })
+        let library = try makeLibrary()
+        let id = try library.save(doc, name: "Scribbled")
+
+        #expect(try library.load(id) == doc)
+    }
 }
