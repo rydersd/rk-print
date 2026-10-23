@@ -387,6 +387,126 @@ bottom bar's New Label, because a title menu or another top-bar button collapses
 overflow menu (seen in the UI test hierarchy); taste review of that placement and whether saving needs
 visible confirmation; template rename.
 
+### S12 — Text boxes fit their text
+
+Added 2026-10-23 on Ryder's request ("the bounding box fits the type, not wildly extends it"). Ruling: auto
+width.
+
+As Ryder, I type a short word and its box is only as wide as the word.
+
+Acceptance:
+1. New text is **auto width**: its box hugs its longest line and grows as I type. It wraps only where the
+   next character would leave the printable area.
+2. Dragging the width handle switches that block to a fixed width that wraps, as today.
+3. Labels saved before S12 keep their fixed widths.
+
+Named tests:
+- `LayoutTests.autoWidthHugsText`: "M6" at 14 pt lays out narrower than a quarter of the printable width,
+  and as wide as the text's own line.
+- `LayoutTests.autoWidthWrapsAtLabelEdge`: auto-width text longer than the label wraps inside the
+  printable area.
+- `LabelEditorTests.dragHandleFixesWidth`: after a width-handle drag the block is fixed width at the
+  dragged width.
+
+Test plan (RC): centre and right alignment of multi-line auto text; rotated auto text; Undo across the
+switch to fixed width.
+
+### S13 — Input and Adjust tools
+
+Added 2026-10-23 on Ryder's request. Rulings: two tool dropdowns, Input first then Adjust; Move and Scale
+both select; Scale resizes in proportion.
+
+As Ryder, I pick what my finger does: make things (Type, Draw, Photo) or arrange them (Move, Scale).
+
+Acceptance:
+1. The top bar's Select, Add Picture and Add Text buttons are replaced by two menus, **Input** (Type, Draw,
+   Photo) and **Adjust** (Move with a four-way arrow icon, Scale), each showing the current tool.
+2. **Type:** tapping text edits it; tapping empty label adds a text block at the tap.
+3. **Move:** tapping selects, and tapping more adds to the selection (Group appears for two or more). A
+   drag moves the selection. The keyboard never opens.
+4. **Scale:** selects like Move; a drag on the selection scales it in proportion (text point size, or
+   picture or scribble width), kept on the label. Pinch still scales in every tool.
+5. **Photo** opens Photos at once and returns to the previous tool.
+
+Named tests:
+- `LabelEditorTests.typeToolTapOnEmptyAddsTextThere`: in Type, a tap on empty label at (10, 8) mm adds
+  text there and starts editing it.
+- `LabelEditorTests.moveToolNeverEdits`: in Move, tapping a text block twice selects it and never edits.
+- `LabelEditorTests.scaleDragGrowsText`: in Scale, a drag on a 14 pt block makes it larger, kept on the
+  label.
+
+Test plan (RC): tool menus with VoiceOver; switching tools mid-edit dismisses the keyboard; the existing
+UI tests move to the tool menus.
+
+### S14 — Draw scribbles
+
+Added 2026-10-23 on Ryder's request ("scribble on a photo"). Rulings: strokes until a pause make one
+scribble; scribbles can go anywhere on the label.
+
+As Ryder, I draw with my finger on the label, over a photo or not, and the scribble prints.
+
+Acceptance:
+1. In **Draw**, a finger drag draws a black stroke. Strokes started within 1 s of the last one ending join
+   the same scribble; after a pause the next stroke starts a new scribble.
+2. A scribble is its own item: in Move or Scale it selects with a bounding box that fits its strokes, and
+   it moves, scales, groups, rotates and deletes like a picture, staying on the label.
+3. What the canvas shows is what prints, and scribbles save with the label. Undo removes the last stroke.
+
+Named tests:
+- `ScribbleTests.strokesWithinPauseJoinOneScribble`: two strokes 0.5 s apart make one scribble; a third
+  2 s later makes a second.
+- `ScribbleTests.scribbleBoxFitsStrokes`: a scribble's layout frame is its strokes' bounds plus the pen
+  width, and it prints ink only inside that frame.
+- `LibraryTests.scribbleRoundTrips`: a label with a scribble saves and reopens unchanged.
+
+Test plan (RC): pen width on 203 dpi stock; drawing performance with long strokes; scribbles inside a
+rotated group.
+
+### S15 — Insert a template into a label
+
+Added 2026-10-23 on Ryder's request ("a plus to insert a template"). Ruling: + adds the template's items
+to the current label.
+
+As Ryder, I tap + and pick a template, and its items land on the label I am working on.
+
+Acceptance:
+1. The top bar's **+** lists my templates. Picking one copies its items (new ids) into the current label
+   as one group, selected, kept on the label. It is one Undo step.
+2. With no templates, + says how to make one (Save as Template).
+
+Named tests:
+- `LabelEditorTests.insertTemplateAddsGroupedCopy`: inserting a two-block template adds two new elements,
+  one group, selected; the template is unchanged.
+- `LabelEditorTests.insertTemplateIsUndoable`: one Undo removes the inserted items.
+
+Test plan (RC): a template from a bigger label size; inserting into a label that already has groups.
+
+### S16 — White or yellow label stock
+
+Added 2026-10-23 on Ryder's request. Ruling: per label, chosen in the size sheet.
+
+As Ryder, I tell the app I loaded the yellow REEKON labels, and the canvas shows yellow.
+
+Acceptance:
+1. The label-size sheet offers **White** and **Yellow** stock. The canvas and the library thumbnail show
+   that colour; the print is unchanged.
+2. Each label keeps its colour; a new label uses the last colour chosen. Labels saved before S16 are
+   white.
+
+Named tests:
+- `LibraryTests.stockColourRoundTrips`: a yellow label saves and reopens yellow; an S15 label decodes white.
+- `LabelEditorTests.newLabelKeepsLastStockColour`: after choosing Yellow, New Label is yellow.
+
+Test plan (RC): yellow against dark mode; thumbnail colour in the library.
+
+### S17 — App icon
+
+Added 2026-10-23 on Ryder's request: "[R]" on yellow, the R in Avenir Next.
+
+Acceptance: the app icon shows "[R]" in Avenir Next on REEKON yellow, at every size iOS asks for.
+
+Named tests: none (an asset). Evidence: the 1024 px icon image shown to Ryder, and the build on the phone.
+
 ## Later (not in this spec)
 
 - **Tape-measure field**: connect to a T1/T1M/T1R (SDK Section I), insert the received or live measurement
