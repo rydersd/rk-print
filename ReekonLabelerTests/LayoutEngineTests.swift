@@ -67,4 +67,29 @@ struct LayoutEngineTests {
         #expect(layout.frameMM.maxX == small.printableRect.maxX)
         #expect(abs(layout.frameMM.width / layout.frameMM.height - 2) < 0.0001)
     }
+
+    // MARK: S12 — text boxes fit their text
+
+    private func autoBlock(_ text: String, x: Double = 1) -> LabelElement {
+        var element = block(x: x, width: small.printableRect.width, text: text)
+        element.textContent?.autoWidth = true
+        return element
+    }
+
+    @Test func autoWidthHugsText() {
+        let layout = LayoutEngine.layout(autoBlock("M6"), in: small)
+        #expect(layout.frameMM.width < small.printableRect.width / 4)
+        // As wide as the text's own line: the same text with that fixed width does not wrap.
+        let fixed = block(width: layout.contentSizeMM.width, text: "M6")
+        #expect(LayoutEngine.layout(fixed, in: small).frameMM.height == layout.frameMM.height)
+        #expect(layout.contentSizeMM.width < LayoutEngine.layout(autoBlock("M6 M6"), in: small).contentSizeMM.width)
+    }
+
+    @Test func autoWidthWrapsAtLabelEdge() {
+        let short = LayoutEngine.layout(autoBlock("BOLTS", x: 10), in: small)
+        let long = LayoutEngine.layout(autoBlock("SHELF A BOLTS NUTS WASHERS", x: 10), in: small)
+        #expect(long.frameMM.minX == 10)
+        #expect(long.frameMM.maxX <= small.printableRect.maxX + 0.001)
+        #expect(long.frameMM.height > short.frameMM.height)
+    }
 }

@@ -401,9 +401,9 @@ Acceptance:
 3. Labels saved before S12 keep their fixed widths.
 
 Named tests:
-- `LayoutTests.autoWidthHugsText`: "M6" at 14 pt lays out narrower than a quarter of the printable width,
+- `LayoutEngineTests.autoWidthHugsText`: "M6" at 14 pt lays out narrower than a quarter of the printable width,
   and as wide as the text's own line.
-- `LayoutTests.autoWidthWrapsAtLabelEdge`: auto-width text longer than the label wraps inside the
+- `LayoutEngineTests.autoWidthWrapsAtLabelEdge`: auto-width text longer than the label wraps inside the
   printable area.
 - `LabelEditorTests.dragHandleFixesWidth`: after a width-handle drag the block is fixed width at the
   dragged width.

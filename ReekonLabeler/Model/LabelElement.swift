@@ -30,9 +30,32 @@ nonisolated struct TextContent: Codable, Hashable, Sendable {
     /// The size the user asked for. Layout may draw it smaller to fit (shrink-to-fit).
     var pointSize = 14.0
     var alignment = TextAlignmentOption.left
+    /// The box hugs the longest line and wraps only at the label edge; a width-handle drag turns it off
+    /// (S12). Labels saved before S12 decode as fixed width.
+    var autoWidth = false
 
     static let minimumPointSize = 4.0
     static let maximumPointSize = 144.0
+
+    init(text: String = "", font: FontSpec = .standard, pointSize: Double = 14.0,
+         alignment: TextAlignmentOption = .left, autoWidth: Bool = false) {
+        self.text = text
+        self.font = font
+        self.pointSize = pointSize
+        self.alignment = alignment
+        self.autoWidth = autoWidth
+    }
+
+    private enum CodingKeys: String, CodingKey { case text, font, pointSize, alignment, autoWidth }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        font = try container.decode(FontSpec.self, forKey: .font)
+        pointSize = try container.decode(Double.self, forKey: .pointSize)
+        alignment = try container.decode(TextAlignmentOption.self, forKey: .alignment)
+        autoWidth = try container.decodeIfPresent(Bool.self, forKey: .autoWidth) ?? false
+    }
 }
 
 nonisolated enum ElementContent: Codable, Hashable, Sendable {
@@ -54,9 +77,11 @@ nonisolated struct LabelElement: Codable, Hashable, Sendable, Identifiable {
     static let minimumWidthMM = 2.0
 
     static func text(_ text: String = "", originMM: CGPoint, widthMM: Double, font: FontSpec = .standard,
-                     pointSize: Double = 14, alignment: TextAlignmentOption = .left) -> LabelElement {
+                     pointSize: Double = 14, alignment: TextAlignmentOption = .left,
+                     autoWidth: Bool = false) -> LabelElement {
         LabelElement(originMM: originMM, widthMM: widthMM,
-                     content: .text(TextContent(text: text, font: font, pointSize: pointSize, alignment: alignment)))
+                     content: .text(TextContent(text: text, font: font, pointSize: pointSize, alignment: alignment,
+                                                autoWidth: autoWidth)))
     }
 
     /// The text, for text elements; setting it on a picture does nothing.

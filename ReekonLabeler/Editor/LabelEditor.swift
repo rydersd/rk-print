@@ -119,7 +119,7 @@ final class LabelEditor {
         let style = selectedElements.compactMap(\.textContent).last
         let element = LabelElement.text(originMM: CGPoint(x: printable.minX, y: nextFreeY(in: doc)),
                                         widthMM: printable.width, font: style?.font ?? .standard,
-                                        pointSize: style?.pointSize ?? 14)
+                                        pointSize: style?.pointSize ?? 14, autoWidth: true)
         doc.elements.append(element)
         commit(doc, action: "Add Text")
         selection = [element.id]
@@ -257,6 +257,8 @@ final class LabelEditor {
         let base = gestureStart ?? document
         guard let start = base.element(id), let index = document.index(of: id) else { return }
         var doc = document
+        // Dragging the handle fixes a text block's width from here on (S12).
+        doc.elements[index].textContent?.autoWidth = false
         doc.elements[index].widthMM = LayoutEngine.resizedWidth(doc.elements[index], from: start.widthMM,
                                                                 by: deltaMM, grid: base.grid, in: doc.geometry)
         commit(doc, action: nil)

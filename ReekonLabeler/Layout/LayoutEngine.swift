@@ -35,6 +35,11 @@ nonisolated enum LayoutEngine {
         let height: Double, pointSize: Double, crossPosition: Double
         switch element.content {
         case .text(let text):
+            // Auto width (S12): as wide as the longest line, wrapping only at the printable edge.
+            if text.autoWidth {
+                let room = alongMax - clamp(originAlong, alongMin, alongMax - LabelElement.minimumWidthMM)
+                width = clamp(naturalWidthMM(text, maximumMM: room), LabelElement.minimumWidthMM, room)
+            }
             let top = clamp(originCross, crossMin, crossMax)
             pointSize = fittedPointSize(for: text, widthMM: width, availableMM: crossMax - top)
             height = textHeightMM(text, pointSize: pointSize, widthMM: width)
@@ -73,6 +78,22 @@ nonisolated enum LayoutEngine {
             }
         }
         return requested - Double(best) * fitStep
+    }
+
+    /// The width of the longest line at the requested size when lines may run up to `maximumMM`, rounded up
+    /// to whole dots. Empty text is a caret's width wide so the box can still be tapped.
+    static func naturalWidthMM(_ text: TextContent, maximumMM: Double) -> Double {
+        let pointSize = clamp(text.pointSize, TextContent.minimumPointSize, TextContent.maximumPointSize)
+        let font = FontCatalog.ctFont(text.font, pointSize: pointSize * dotsPerPoint)
+        guard !text.text.isEmpty else {
+            return ((CTFontGetAscent(font) + CTFontGetDescent(font)) / 2).rounded(.up) / LabelGeometry.dotsPerMM
+        }
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedText(text, font: font))
+        let suggested = CTFramesetterSuggestFrameSizeWithConstraints(
+            framesetter, CFRange(), nil,
+            CGSize(width: maximumMM * LabelGeometry.dotsPerMM, height: .greatestFiniteMagnitude), nil)
+        // One spare dot so the measured line never wraps when laid out at exactly this width.
+        return (suggested.width.rounded(.up) + 1) / LabelGeometry.dotsPerMM
     }
 
     static func textHeightMM(_ text: TextContent, pointSize: Double, widthMM: Double) -> Double {

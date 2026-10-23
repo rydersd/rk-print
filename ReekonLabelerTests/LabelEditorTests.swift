@@ -137,4 +137,24 @@ struct LabelEditorTests {
         #expect(editor.selection == [picture.id, text.id])
         #expect(editor.inspectedElement?.id == picture.id)
     }
+
+    // MARK: S12
+
+    @Test func dragHandleFixesWidth() throws {
+        let editor = LabelEditor(document: LabelDocument(), undoManager: nil, persistsWorkingLabel: false)
+        editor.addText()
+        let id = try #require(editor.selectedID)
+        editor.setText("BOLTS", for: id)
+        #expect(editor.document.element(id)?.textContent?.autoWidth == true)
+        let autoWidth = try #require(editor.layouts[id]).contentSizeMM.width
+
+        editor.beginGesture()
+        editor.resizeElement(id, deltaMM: 10)
+        editor.endGesture(action: "Resize Text")
+
+        let element = try #require(editor.document.element(id))
+        #expect(element.textContent?.autoWidth == false)
+        #expect(abs(element.widthMM - (autoWidth + 10).rounded()) <= 1)
+        #expect(abs(try #require(editor.layouts[id]).contentSizeMM.width - element.widthMM) < 0.001)
+    }
 }
