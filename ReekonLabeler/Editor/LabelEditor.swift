@@ -3,6 +3,14 @@ import Foundation
 import Observation
 import os
 
+/// What a finger does on the canvas (S13). Type makes text; Move and Scale select and arrange.
+enum EditorTool: CaseIterable {
+    case type, move, scale
+
+    /// Move and Scale: taps add or remove elements from the selection and never start typing.
+    var selects: Bool { self != .type }
+}
+
 /// The label being edited. Every change goes through here so it is kept inside the label, re-rendered,
 /// and undoable as a whole-document snapshot.
 @Observable
@@ -10,8 +18,7 @@ final class LabelEditor {
     private(set) var document: LabelDocument
     /// The selected elements. Selecting a grouped element selects its whole group (S5).
     private(set) var selection: Set<UUID> = []
-    /// Select mode: taps add or remove elements from the selection and never start typing (S5).
-    private(set) var isSelecting = false
+    private(set) var tool = EditorTool.type
     /// The text element whose inline text field has focus.
     var editingID: UUID?
     /// The member of the selected group that a second tap picked out.
@@ -81,14 +88,14 @@ final class LabelEditor {
 
     var canGroup: Bool { selection.count >= 2 && !selectionIsGroup }
 
-    /// Taps on an element. In Select mode this adds or removes its group. Otherwise it selects its group and,
+    /// Taps on an element. In Move or Scale this adds or removes its group. Otherwise it selects its group and,
     /// for ungrouped text, starts typing; tapping a member of the already-selected group types into that
     /// member, so a double tap edits it without single taps waiting to rule out a double.
     func tap(_ id: UUID) {
         let members = document.groupMembers(of: id)
         guard !members.isEmpty else { return }
         let isText = document.element(id)?.isText == true
-        if isSelecting {
+        if tool.selects {
             if members.isSubset(of: selection) { selection.subtract(members) } else { selection.formUnion(members) }
             editingID = nil
             focusedMemberID = nil
@@ -109,27 +116,40 @@ final class LabelEditor {
         editingID = nil
     }
 
-    /// Select mode starts with nothing selected, so the block just typed in is not toggled off by the
-    /// first tap meant to add it.
-    func setSelecting(_ on: Bool) {
-        if on && !isSelecting { selection = [] }
-        isSelecting = on
+    /// Taps on the label where no element is. Type adds a text block there (S13); the other tools deselect.
+    func tapLabel(atMM point: CGPoint) {
+        guard tool == .type else { return clearSelection() }
+        addText(atMM: point)
+    }
+
+    /// Moving to Move or Scale starts with nothing selected, so the block just typed in is not toggled off
+    /// by the first tap meant to add it (S5).
+    func setTool(_ newTool: EditorTool) {
+        if newTool.selects && !tool.selects { selection = [] }
+        tool = newTool
         editingID = nil
     }
 
     // MARK: Adding and removing
 
-    func addText() {
+    /// Adds a text block at `point`, or below the existing elements, styled like the selected text. A block
+    /// left empty is dropped in the same step, so tapping around in Type does not pile up invisible blocks.
+    func addText(atMM point: CGPoint? = nil) {
         var doc = document
         let printable = doc.geometry.printableRect
         let style = selectedElements.compactMap(\.textContent).last
-        let element = LabelElement.text(originMM: CGPoint(x: printable.minX, y: nextFreeY(in: doc)),
-                                        widthMM: printable.width, font: style?.font ?? .standard,
-                                        pointSize: style?.pointSize ?? 14, autoWidth: true)
+        if let id = editingID, doc.element(id)?.textContent?.text.isEmpty == true {
+            doc.elements.removeAll { $0.id == id }
+        }
+        let origin = point.map { CGPoint(x: LayoutEngine.snap($0.x, doc.grid), y: LayoutEngine.snap($0.y, doc.grid)) }
+            ?? CGPoint(x: printable.minX, y: nextFreeY(in: doc))
+        let element = LabelElement.text(originMM: origin, widthMM: printable.maxX - origin.x,
+                                        font: style?.font ?? .standard, pointSize: style?.pointSize ?? 14,
+                                        autoWidth: true)
         doc.elements.append(element)
         commit(doc, action: "Add Text")
         selection = [element.id]
-        editingID = isSelecting ? nil : element.id
+        editingID = tool.selects ? nil : element.id
     }
 
     /// Adds a picture below the existing elements, as wide as the printable area allows (S7).
@@ -270,7 +290,21 @@ final class LabelEditor {
         commit(doc, action: nil)
     }
 
-    /// Pinch: text changes point size, pictures change width, measured from the gesture's start.
+    /// Scale tool drag on element `id` (S13): dragging along its lines by the box's own length doubles the
+    /// selection, in proportion, measured from the gesture's start.
+    func scaleSelection(grabbing id: UUID, translationMM: CGSize) {
+        if !selection.contains(id) { selection = document.groupMembers(of: id) }
+        let base = gestureStart ?? document
+        guard let start = base.element(id) else { return }
+        let frame = LayoutEngine.layout(start, in: base.geometry).frameMM
+        let sideways = start.rotation.isSideways
+        let span = max(sideways ? frame.height : frame.width, LabelElement.minimumWidthMM)
+        let along = sideways ? translationMM.height : translationMM.width
+        scaleSelection(by: max(0.1, (span + along) / span))
+    }
+
+    /// Pinch or Scale drag: text changes point size (and a fixed width with it, so lines break the same),
+    /// pictures change width, measured from the gesture's start.
     func scaleSelection(by factor: Double) {
         let base = gestureStart ?? document
         var doc = document
@@ -281,6 +315,10 @@ final class LabelEditor {
                 let size = (text.pointSize * factor * 2).rounded() / 2
                 doc.elements[index].textContent?.pointSize = min(max(size, TextContent.minimumPointSize),
                                                                  TextContent.maximumPointSize)
+                if !text.autoWidth {
+                    doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
+                                                      LayoutEngine.snap(start.widthMM * factor, base.grid))
+                }
             case .picture:
                 doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
                                                   LayoutEngine.snap(start.widthMM * factor, base.grid))

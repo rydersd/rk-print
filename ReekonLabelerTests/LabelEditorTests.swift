@@ -46,11 +46,11 @@ struct LabelEditorTests {
         let right = LabelElement.text("B", originMM: CGPoint(x: 21, y: 2), widthMM: 10)
         let editor = LabelEditor(document: LabelDocument(grid: .one, elements: [left, right]), undoManager: undo,
                                  persistsWorkingLabel: false)
-        editor.setSelecting(true)
+        editor.setTool(.move)
         editor.tap(left.id)
         editor.tap(right.id)
         editor.group()
-        editor.setSelecting(false)
+        editor.setTool(.type)
         return (editor, left, right)
     }
 
@@ -102,14 +102,16 @@ struct LabelEditorTests {
         #expect(editor.layouts[element.id]?.frameMM == frameBefore)
     }
 
-    /// S5 regression: the block just typed in must not stay selected when Select starts, or tapping it
+    /// S5 regression: the block just typed in must not stay selected when Move starts, or tapping it
     /// to add it to the selection would remove it instead.
     @Test func selectModeStartsEmptyAfterTyping() {
         let editor = LabelEditor(document: LabelDocument(), undoManager: nil, persistsWorkingLabel: false)
         editor.addText()
+        editor.setText("A", for: editor.document.elements[0].id)
         editor.addText()
+        editor.setText("B", for: editor.document.elements[1].id)
         let first = editor.document.elements[0].id, second = editor.document.elements[1].id
-        editor.setSelecting(true)
+        editor.setTool(.move)
         editor.tap(first)
         editor.tap(second)
         #expect(editor.selection == [first, second])
@@ -123,11 +125,11 @@ struct LabelEditorTests {
         let text = LabelElement.text("A", originMM: CGPoint(x: 21, y: 2), widthMM: 10)
         let editor = LabelEditor(document: LabelDocument(grid: .one, elements: [picture, text]), undoManager: nil,
                                  persistsWorkingLabel: false)
-        editor.setSelecting(true)
+        editor.setTool(.move)
         editor.tap(picture.id)
         editor.tap(text.id)
         editor.group()
-        editor.setSelecting(false)
+        editor.setTool(.type)
         editor.clearSelection()
 
         editor.tap(picture.id)
@@ -174,5 +176,59 @@ struct LabelEditorTests {
         editor.setStock(.yellow)
         undo.undo()
         #expect(editor.document.stock == .white)
+    }
+
+    // MARK: S13 — Input and Adjust tools
+
+    @Test func typeToolTapOnEmptyAddsTextThere() throws {
+        let undo = makeUndo()
+        let editor = LabelEditor(document: LabelDocument(), undoManager: undo, persistsWorkingLabel: false)
+        #expect(editor.tool == .type)
+
+        editor.tapLabel(atMM: CGPoint(x: 10, y: 8))
+
+        let added = try #require(editor.document.elements.first)
+        #expect(editor.document.elements.count == 1)
+        #expect(added.originMM == CGPoint(x: 10, y: 8))
+        #expect(added.textContent?.autoWidth == true)
+        #expect(editor.editingID == added.id)
+        undo.undo()
+        #expect(editor.document.elements.isEmpty)
+    }
+
+    @Test func moveToolNeverEdits() throws {
+        let block = LabelElement.text("BOLTS", originMM: CGPoint(x: 2, y: 2), widthMM: 20)
+        let editor = LabelEditor(document: LabelDocument(elements: [block]), undoManager: nil,
+                                 persistsWorkingLabel: false)
+        editor.setTool(.move)
+
+        editor.tap(block.id)
+        #expect(editor.selection == [block.id])
+        #expect(editor.editingID == nil)
+        editor.tap(block.id)
+        #expect(editor.editingID == nil)
+        editor.tapLabel(atMM: CGPoint(x: 20, y: 20))
+        #expect(editor.document.elements.count == 1)
+        #expect(editor.selection.isEmpty)
+    }
+
+    @Test func scaleDragGrowsText() throws {
+        let undo = makeUndo()
+        let block = LabelElement.text("BOLTS", originMM: CGPoint(x: 2, y: 2), widthMM: 20, pointSize: 14)
+        let editor = LabelEditor(document: LabelDocument(elements: [block]), undoManager: undo,
+                                 persistsWorkingLabel: false)
+        editor.setTool(.scale)
+
+        editor.beginGesture()
+        editor.scaleSelection(grabbing: block.id, translationMM: CGSize(width: 10, height: 0))
+        editor.endGesture(action: "Scale")
+
+        let scaled = try #require(editor.document.element(block.id))
+        #expect(editor.selection == [block.id])
+        #expect(try #require(scaled.textContent).pointSize > 14)
+        let frame = try #require(editor.layouts[block.id]).frameMM
+        #expect(editor.document.geometry.printableRect.contains(frame))
+        undo.undo()
+        #expect(editor.document.element(block.id)?.textContent?.pointSize == 14)
     }
 }

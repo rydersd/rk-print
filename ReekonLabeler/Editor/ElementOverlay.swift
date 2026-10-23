@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// One element's hit area on the canvas: tap to select (and type, for text), drag to move the selection,
-/// drag the handle to change width. Text and pictures are drawn by the bitmap underneath; the inline
-/// field's text is clear so only the caret and selection show over it.
+/// One element's hit area on the canvas: tap to select (and type, for text), drag to move the selection (or
+/// scale it, with the Scale tool), drag the handle to change width. Text and pictures are drawn by the
+/// bitmap underneath; the inline field's text is clear so only the caret and selection show over it.
 struct ElementOverlay: View {
     let editor: LabelEditor
     let element: LabelElement
@@ -10,6 +10,8 @@ struct ElementOverlay: View {
     let scale: Double
 
     @State private var isDragging = false
+    /// The tool the current drag started in, so its undo step is named for what it did.
+    @State private var dragScales = false
     @State private var isResizing = false
     @FocusState private var isFocused: Bool
 
@@ -98,15 +100,20 @@ struct ElementOverlay: View {
             .onChanged { value in
                 if !isDragging {
                     isDragging = true
+                    dragScales = editor.tool == .scale
                     editor.beginGesture()
                 }
-                editor.moveSelection(grabbing: element.id,
-                                     translationMM: CGSize(width: value.translation.width / scale,
-                                                           height: value.translation.height / scale))
+                let translation = CGSize(width: value.translation.width / scale,
+                                         height: value.translation.height / scale)
+                if dragScales {
+                    editor.scaleSelection(grabbing: element.id, translationMM: translation)
+                } else {
+                    editor.moveSelection(grabbing: element.id, translationMM: translation)
+                }
             }
             .onEnded { _ in
                 isDragging = false
-                editor.endGesture(action: "Move")
+                editor.endGesture(action: dragScales ? "Scale" : "Move")
             }
     }
 

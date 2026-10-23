@@ -18,7 +18,10 @@ final class LibraryUITests: XCTestCase {
         XCTAssertTrue(newLabel.waitForExistence(timeout: 5), "empty library should offer New Label")
         newLabel.tap()
 
-        app.buttons["addTextButton"].tap()
+        // S13: the Type tool adds text where the label is tapped.
+        let canvas = app.descendants(matching: .any)["labelCanvas"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 5))
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.45)).tap()
         app.typeText("BINS")
         library.tap()
         let row = app.buttons["libraryLabel"]

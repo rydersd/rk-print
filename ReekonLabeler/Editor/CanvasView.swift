@@ -37,7 +37,16 @@ struct CanvasView: View {
             .gesture(pinch)
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             .contentShape(.rect)
-            .onTapGesture { editor.clearSelection() }
+            .onTapGesture { location in
+                // The label is centred in the proxy; taps on the background around it only deselect.
+                let mm = CGPoint(x: (location.x - (proxy.size.width - size.width) / 2) / scale,
+                                 y: (location.y - (proxy.size.height - size.height) / 2) / scale)
+                if CGRect(origin: .zero, size: label).contains(mm) {
+                    editor.tapLabel(atMM: mm)
+                } else {
+                    editor.clearSelection()
+                }
+            }
         }
     }
 

@@ -14,6 +14,7 @@ struct EditorScreen: View {
     @State private var sheet: Sheet?
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var cropping: CropRequest?
+    @State private var showsPhotos = false
 
     private enum Sheet: String, Identifiable {
         case labelSize, fonts, printer, library
@@ -52,6 +53,7 @@ struct EditorScreen: View {
             .fullScreenCover(item: $cropping) { request in
                 CropView(request: request) { crop in finishCrop(request, crop: crop) }
             }
+            .photosPicker(isPresented: $showsPhotos, selection: $pickedPhoto, matching: .images)
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
                 pickedPhoto = nil
@@ -75,29 +77,19 @@ struct EditorScreen: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        // The tools are in the top bar so they stay reachable while the keyboard covers the bottom bar (S13).
         ToolbarItemGroup(placement: .topBarLeading) {
             Button("Library", systemImage: "books.vertical") { sheet = .library }
-            // In the top bar so it stays reachable while the keyboard covers the bottom bar.
-            Button(editor.isSelecting ? "Done Selecting" : "Select",
-                   systemImage: editor.isSelecting ? "checkmark.circle.fill" : "checkmark.circle") {
-                editor.setSelecting(!editor.isSelecting)
-            }
-            .accessibilityIdentifier("selectButton")
+            toolMenu("Input", tools: [.type], showsPhoto: true)
+                .accessibilityIdentifier("inputMenu")
+            toolMenu("Adjust", tools: [.move, .scale], showsPhoto: false)
+                .accessibilityIdentifier("adjustMenu")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button("Undo", systemImage: "arrow.uturn.backward") { undoManager.undo() }
                 .disabled(!canUndo)
             Button("Redo", systemImage: "arrow.uturn.forward") { undoManager.redo() }
                 .disabled(!canRedo)
-        }
-        // In the top bar so they stay reachable while the keyboard covers the bottom bar.
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                Label("Add Picture", systemImage: "photo.badge.plus")
-            }
-            .accessibilityIdentifier("addPictureButton")
-            Button("Add Text", systemImage: "plus") { editor.addText() }
-                .accessibilityIdentifier("addTextButton")
         }
         ToolbarItemGroup(placement: .bottomBar) {
             Button(editor.document.size.displayName) { sheet = .labelSize }
@@ -125,6 +117,26 @@ struct EditorScreen: View {
             .accessibilityIdentifier("newLabelButton")
             printButton
         }
+    }
+
+    /// A dropdown of tools (S13). Its icon is the current tool when that tool is in this menu, filled so
+    /// the active menu stands out; otherwise the menu's first tool, outlined.
+    private func toolMenu(_ title: String, tools: [EditorTool], showsPhoto: Bool) -> some View {
+        let isActive = tools.contains(editor.tool)
+        let shown = isActive ? editor.tool : tools[0]
+        return Menu {
+            Picker(title, selection: Binding(get: { editor.tool }, set: { editor.setTool($0) })) {
+                ForEach(tools, id: \.self) { tool in Label(tool.title, systemImage: tool.systemImage).tag(tool) }
+            }
+            if showsPhoto {
+                // An action, not a tool: the tool in use stays as it was.
+                Button("Photo", systemImage: "photo.badge.plus") { showsPhotos = true }
+            }
+        } label: {
+            Label(title, systemImage: shown.systemImage)
+                .symbolVariant(isActive ? .circle.fill : .none)
+        }
+        .accessibilityValue(isActive ? shown.title : "")
     }
 
     private var printButton: some View {
@@ -195,6 +207,24 @@ struct EditorScreen: View {
             var picture = request.picture
             picture.crop = crop
             editor.addPicture(picture)
+        }
+    }
+}
+
+extension EditorTool {
+    var title: String {
+        switch self {
+        case .type: "Type"
+        case .move: "Move"
+        case .scale: "Scale"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .type: "character.cursor.ibeam"
+        case .move: "arrow.up.and.down.and.arrow.left.and.right"
+        case .scale: "arrow.up.left.and.arrow.down.right"
         }
     }
 }
