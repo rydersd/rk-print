@@ -7,19 +7,32 @@ Parent: `2026-10-19-reekon-labeler-design.md`, Later → "Tape-measure field" ("
 
 ## Goal
 
-Measure with the T1 Tomahawk, press its save button, and the measurement appears on the label as text in my
-unit, ready to print on the P1L. Today the app sees only the printer: `P1LPrinter` keeps names containing "P1".
+Measure things with the T1 Tomahawk, pick the measurements in the app, and put them on the label as a little
+table: a title row naming the thing, then one row per measurement (label + value), ready to print on the P1L.
+Today the app sees only the printer: `P1LPrinter` keeps names containing "P1".
+
+Ryder 2026-10-23: "i want to be able to select measurements and insert them onto the label in a little table.
+header row with what it is, then a label + measurement. initially 2 rows. i should be able to add more, and if
+its 3 measurements i'm selecting, it should infer it's l w d. and have 3 rows."
+
+## Decisions made (2026-10-23, Ryder)
+
+| Topic | Ruling |
+|---|---|
+| Header row | A title Ryder types, naming the thing measured (e.g. "Cabinet door"), across the top. |
+| Table | A real table element: cells edit in place, rows can be added any time, it moves and scales as one. |
+| On save | A measurement saved on the tool goes into the app's measurement list only. Nothing lands on the label by itself. Measurements saved before connecting are in the list too. |
+| Row labels | 3 picked → L, W, D. 2 picked → L, W. 1, or 4 and up → blank labels to type. Fewer than 2 still gives 2 rows. Every label stays editable. |
 
 ## Proposed rulings (need Ryder's yes)
 
 | Topic | Proposal |
 |---|---|
 | Tools | T1 Tomahawk only (device_type 1). T1M and T1R are recognised and shown as "not supported yet" (Later). |
-| Trigger | A measurement the user **saves on the tool while connected** goes on the label. The live reading is not used (Later). |
-| Backlog | Measurements saved before connecting are not put on the label (they would flood it). |
-| Where it lands | Editing a text block: appended to that block's text after a space. Otherwise: a new text block, placed like Add Text. One Undo step either way. |
-| Units | One app-wide unit, chosen in the tape sheet: **fractional inches** (default, nearest 1/16, `25 3/8"`), feet-inches (`2' 1 3/8"`), mm (`645 mm`), cm (`64.5 cm`). |
-| UI | A **Tape** item in the Input menu (next to Photo) opens the tape sheet: find, connect, unit, status. No new top-bar button. |
+| UI | Input menu gains **Table** (an empty table) and **Tape** (the tape sheet), next to Photo. No new top-bar button. |
+| Units | One app-wide unit, chosen in the tape sheet: **fractional inches** (default, nearest 1/16, `25 3/8"`), feet-inches (`2' 1 3/8"`), mm (`645 mm`), cm (`64.5 cm`). A value becomes cell text when inserted; changing the unit later does not rewrite tables already on labels. |
+| List lifetime | The list lives while the app runs and is rebuilt on each connect (Request All). The tool keeps its own copies, so nothing is lost when the app closes. |
+| Table look | Thin 1-dot lines around the table and between rows; the title row bold; labels left, values right; text size like Add Text and scaled with the table. |
 
 ## Tool facts this design relies on (SDK Section I)
 
@@ -30,24 +43,32 @@ unit, ready to print on the P1L. Today the app sees only the printer: `P1LPrinte
   use; a button press wakes it.
 - Check the Sync Service `43744f76-de4d-4b05-a14a-0c133a785d8e` exists (else: "needs a firmware update in
   REEKON's app"). Protocol Version `2731f0a6-c56c-4da8-85bd-a586145ad952` reads 1 on the T1.
-- Subscribe to notify (never indicate) on Comm `6f0b2d1e-99e2-4ef4-bfab-70a5f3890f32`, then write opcode 5
-  (Request Unsynced). iOS raises the MTU past the T1's 35 bytes on its own.
-- Comm messages: opcode u32, data_len u32, data. T1 measurements are opcode 4, 24 bytes: uuid u32, flags u32
-  (0x0001 SYNC = sent by a sync, clear when sent live), position_um i32 (final, as the tool showed it), …
-- Repeats happen: identify a measurement by device_id + uuid. Ignore unknown opcodes.
+- Subscribe to notify (never indicate) on Comm `6f0b2d1e-99e2-4ef4-bfab-70a5f3890f32`, then write opcode 7
+  (Request All: every saved measurement, then new ones as they are saved). iOS raises the MTU past the
+  T1's 35 bytes on its own.
+- Comm messages: opcode u32, data_len u32, data. T1 measurements are opcode 4, 24 bytes: uuid u32, flags u32,
+  position_um i32 (final, as the tool showed it), zero_delta_um, active_offset_um, group_number u16 (0 =
+  DEFAULT, n = GROUP n+1), measurement_number u16 (0 = A, 1 = B …).
+- Repeats happen: identify a measurement by device_id + uuid. Ignore unknown opcodes. No message ends a sync.
 - Do not touch the State Service's other characteristics or the update service (some force pairing).
 
 ## Architecture
 
+- `Measuring/T1Protocol.swift` — pure parsing: advertising → `(deviceType, deviceID)` or nil; Comm message →
+  `T1Measurement(uuid, flags, positionUM, group, letter)` or nil. No CoreBluetooth types, so it is unit-tested.
 - `Measuring/T1Tape.swift` — `@Observable @MainActor` CoreBluetooth client with its own `CBCentralManager`
   (the printer keeps its own). States: off, unauthorised, searching, connecting, connected(name), needs
-  update, failed(message). Remembers the chosen tool's device_id and reconnects when it advertises again.
-  Publishes each new live measurement once.
-- `Measuring/T1Protocol.swift` — pure parsing: advertising → `(deviceType, deviceID)` or nil; Comm message →
-  `T1Measurement(uuid, flags, positionUM)` or nil. No CoreBluetooth types, so it is unit-tested.
-- `Measuring/MeasurementFormat.swift` — `MeasurementUnit` enum and `format(positionUM:unit:) -> String`.
-  Negative values (relative mode) keep their minus sign.
-- `Measuring/TapeSheet.swift` — the sheet. `LabelEditor.insertMeasurement(_ text: String)` does the edit.
+  update, failed(message). Remembers the chosen tool's device_id, reconnects when it advertises again, and
+  owns the measurement list (newest first, repeats dropped).
+- `Measuring/MeasurementFormat.swift` — `MeasurementUnit` and `format(positionUM:unit:) -> String`. Negative
+  values (relative mode) keep their minus sign.
+- `Measuring/TapeSheet.swift` — connect, unit, the list with checkmarks, **Insert Table**.
+- `Model`: a new `LabelElement` content case, `.table(TableContent)` — `title: String`, `rows: [TableRow]`
+  (`label`, `value`), font and size. Saved with the label like other content; labels saved before it decode
+  unchanged.
+- `LayoutEngine` and `LabelRenderer` lay out and draw the table, so the canvas and the print match.
+- `LabelEditor`: `addTable(rows:)`, `addTableRow(to:)`, `setTableCell(...)`, and
+  `TableContent.fromMeasurements(_:unit:)` for the L/W/D rule.
 - `NSBluetoothAlwaysUsageDescription` becomes "Labeler uses Bluetooth to print on your REEKON P1L and read
   your REEKON tape measure."
 
@@ -71,39 +92,75 @@ Named tests:
 - `T1ProtocolTests.skipsKeyboardMode`: HID service 0x1812 or a name ending "[HID]" → not offered.
 
 Test plan (RC): connect on the real T1; the 3-minute sleep, then a button press reconnects; Bluetooth off
-and denied; the printer and the T1 connected at once, then printing while a measurement arrives.
+and denied; the printer and the T1 connected at once.
 
-### S19 — A saved measurement goes on the label
+### S19 — The measurement list
 
-As Ryder, I press save on the T1 and the measurement appears on my label in my unit.
+As Ryder, I see the measurements saved on my T1 in the tape sheet, including new ones the moment I save them.
 
 Acceptance:
-1. While connected, each measurement saved on the tool appears on the label within 1 s: appended to the
-   text block being edited, otherwise as a new text block. It is one Undo step.
-2. It is written in the unit chosen in the tape sheet (fractional inches by default); the choice is
-   remembered.
-3. Measurements sent by the sync (SYNC flag) and repeats (same device_id + uuid) are not added.
+1. On connect, every measurement saved on the tool appears in the list, newest first, each with its value
+   in my unit and its letter as the tool shows it (e.g. "A", or "Group 2 · B").
+2. A measurement saved on the tool while connected appears at the top within 1 s.
+3. A measurement appears once, however many times the tool sends it.
+
+Named tests:
+- `T1ProtocolTests.parsesLegacyMeasurement`: a 24-byte opcode-4 message → uuid, position, group, letter;
+  shorter data or another opcode → nil.
+- `MeasurementListTests.dropsRepeats`: the same uuid twice → one entry; entries newest first.
+
+Test plan (RC): ten quick saves in a row (none lost or doubled); a tool with 50+ saved measurements;
+measure-back and center-mode readings against the tool's screen.
+
+### S20 — Table element
+
+As Ryder, I add a little table to my label: a title row, then rows of label and measurement.
+
+Acceptance:
+1. Input → **Table** adds a table with a title row and 2 empty rows, selected, inside the label. One Undo
+   removes it.
+2. Tapping a cell edits it in place (Type tool). **Add Row** in the inspector adds an empty row at the
+   bottom; it is one Undo step. The table stays inside the label (it shrinks to fit, like text).
+3. Move, Scale, pinch, group and Rotate 90° treat the table as one item. It prints as the canvas shows.
+4. A table survives save and reopen.
+
+Named tests:
+- `LabelEditorTests.addTableHasTitleAndTwoRows`: one table, 2 empty rows; one Undo removes it.
+- `LabelEditorTests.addTableRowIsUndoable`: Add Row → 3 rows; one Undo → 2 rows.
+- `LibraryTests.tableRoundTrips`: a table with title and 3 filled rows saves and reopens equal; a label saved
+  before S20 still opens.
+
+Test plan (RC): removing a row (not in this story; Later if needed); a table that outgrows a 30 × 50 mm
+label; a rotated table; cell editing with the keyboard over the canvas; the print against the canvas.
+
+### S21 — Insert picked measurements as a table
+
+As Ryder, I tick measurements in the list and tap Insert Table, and they go on the label as rows.
+
+Acceptance:
+1. Insert Table adds a table (S20) with one row per ticked measurement, in the order ticked, values in my
+   unit, title empty and ready to type. One Undo removes it.
+2. Row labels: 3 ticked → L, W, D. 2 → L, W. 1, or 4 and up → blank. Fewer than 2 ticked still gives 2 rows.
+3. The unit is chosen in the tape sheet (fractional inches by default) and remembered.
 
 Named tests:
 - `MeasurementFormatTests.formatsEachUnit`: 644,525 µm → `25 3/8"`, `2' 1 3/8"`, `645 mm`, `64.5 cm`;
   −12,700 µm → `-1/2"`.
-- `T1ProtocolTests.dropsSyncedAndRepeatedMeasurements`: a live opcode-4 message → one measurement with its
-  position; the same uuid again → none; SYNC flag set → none; data shorter than 24 bytes → none.
-- `LabelEditorTests.insertMeasurementIsOneUndoStep`: with nothing edited it adds one text block with the text;
-  with a block being edited it appends; one Undo restores the label either way.
+- `TableContentTests.threeMeasurementsAreLWD`: 3 → labels L, W, D with formatted values; 2 → L, W.
+- `TableContentTests.otherCountsHaveBlankLabels`: 1 → 2 rows, the second empty; 4 → 4 rows, all labels blank.
 
-Test plan (RC): ten quick saves in a row (none lost or doubled); measure-back and center-mode readings
-against the tool's screen; a reading arriving while dragging or with the crop open; rounding at 1/16 edges
-(e.g. 15/16 → next inch).
+Test plan (RC): rounding at 1/16 edges (15/16 → next inch); a negative (relative) reading; insert with no
+label open in the library; insert while a text block is being edited.
 
 ## Later (not in this spec)
 
 - T1M and T1R (items, opcode 13+; drop the opcode-4 copy with the same uuid), laser and level readings.
-- Live reading: a button that inserts the tape's current reading (poll Live Measurement every 200 ms).
+- Live reading: insert the tape's current reading (poll Live Measurement every 200 ms).
+- Remove a table row; reorder rows; more than two columns.
 - Laser on/off from the app (opcode 11).
-- Pulling the tool's saved backlog onto a label (Request All, opcode 7).
+- Keeping the measurement list across app launches.
 
 ## Open questions
 
-- Does the T1 send newly saved measurements without the opcode-5 request? (Device check in S18; we send it
-  anyway, as the SDK says.)
+- Does Request All on the T1 keep sending newly saved measurements afterwards, as Request Unsynced does?
+  (Device check in S19; if not, send opcode 5 after the sync goes quiet for 2 s.)
