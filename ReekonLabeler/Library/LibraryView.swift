@@ -259,10 +259,10 @@ private struct LabelRow: View {
     @ViewBuilder
     static func thumbnail(_ label: SavedLabel) -> some View {
         if let data = label.thumbnailPNG, let image = UIImage(data: data) {
+            // The thumbnail carries its own stock colour (S16), so the edge hugs the image.
             Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
-                .frame(width: 64, height: 40)
-                .background(Theme.labelStock)
                 .border(Theme.labelEdge)
+                .frame(width: 64, height: 40)
         } else {
             Image(systemName: "tag").frame(width: 64, height: 40)
         }

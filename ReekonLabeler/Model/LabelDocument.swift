@@ -17,18 +17,40 @@ nonisolated enum GridStep: Double, Codable, Sendable, CaseIterable {
     }
 }
 
+/// The colour of the loaded roll (S16). The print is the same on either; only the preview changes.
+nonisolated enum LabelStock: String, Codable, Sendable, CaseIterable {
+    case white, yellow
+
+    var displayName: String {
+        switch self {
+        case .white: "White"
+        case .yellow: "Yellow"
+        }
+    }
+
+    /// sRGB components, shared by the canvas colour token and the library thumbnail.
+    var rgb: (red: Double, green: Double, blue: Double) {
+        switch self {
+        case .white: (1, 1, 1)
+        case .yellow: (1, 0.82, 0)
+        }
+    }
+}
+
 /// A whole label: its stock, how it is shown, and the text and pictures on it, back to front.
 nonisolated struct LabelDocument: Codable, Hashable, Sendable {
     var size = LabelSize.small
     var orientation = Orientation.headNative
     var grid = GridStep.one
+    var stock = LabelStock.white
     var elements: [LabelElement] = []
 
     init(size: LabelSize = .small, orientation: Orientation = .headNative, grid: GridStep = .one,
-         elements: [LabelElement] = []) {
+         stock: LabelStock = .white, elements: [LabelElement] = []) {
         self.size = size
         self.orientation = orientation
         self.grid = grid
+        self.stock = stock
         self.elements = elements
     }
 
@@ -61,13 +83,15 @@ nonisolated struct LabelDocument: Codable, Hashable, Sendable {
     }
 
     // Labels saved before S5–S7 store their text blocks under "blocks".
-    private enum CodingKeys: String, CodingKey { case size, orientation, grid, elements, blocks }
+    private enum CodingKeys: String, CodingKey { case size, orientation, grid, stock, elements, blocks }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         size = try container.decode(LabelSize.self, forKey: .size)
         orientation = try container.decode(Orientation.self, forKey: .orientation)
         grid = try container.decode(GridStep.self, forKey: .grid)
+        // Labels saved before S16 are white.
+        stock = try container.decodeIfPresent(LabelStock.self, forKey: .stock) ?? .white
         elements = try container.decodeIfPresent([LabelElement].self, forKey: .elements)
             ?? container.decodeIfPresent([LabelElement].self, forKey: .blocks) ?? []
     }
@@ -77,6 +101,7 @@ nonisolated struct LabelDocument: Codable, Hashable, Sendable {
         try container.encode(size, forKey: .size)
         try container.encode(orientation, forKey: .orientation)
         try container.encode(grid, forKey: .grid)
+        try container.encode(stock, forKey: .stock)
         try container.encode(elements, forKey: .elements)
     }
 }

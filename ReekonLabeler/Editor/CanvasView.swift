@@ -20,6 +20,8 @@ struct CanvasView: View {
                     Image(decorative: image, scale: 1)
                         .resizable()
                         .interpolation(.none)
+                        // The bitmap is opaque white where nothing prints; multiply lets the stock colour through.
+                        .blendMode(.multiply)
                         .frame(width: geometry.printableRect.width * scale, height: geometry.printableRect.height * scale)
                         .offset(x: geometry.printableRect.minX * scale, y: geometry.printableRect.minY * scale)
                         .allowsHitTesting(false)
@@ -39,10 +41,10 @@ struct CanvasView: View {
         }
     }
 
-    /// White stock, hatched where the head cannot print, and grid dots inside the printable area.
+    /// The stock in its colour (S16), hatched where the head cannot print, and grid dots inside the printable area.
     private func stock(geometry: LabelGeometry, scale: Double) -> some View {
         Canvas { context, size in
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.labelStock))
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.labelStock(editor.document.stock)))
             let printable = CGRect(x: geometry.printableRect.minX * scale, y: geometry.printableRect.minY * scale,
                                    width: geometry.printableRect.width * scale, height: geometry.printableRect.height * scale)
             var hatch = Path()

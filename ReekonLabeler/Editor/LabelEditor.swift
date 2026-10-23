@@ -32,10 +32,13 @@ final class LabelEditor {
     @ObservationIgnored private var persistTask: Task<Void, Never>?
     /// The copy last written to the library, so opening a label does not rewrite it or bump its date.
     @ObservationIgnored private var savedDocument: LabelDocument?
+    /// The stock colour chosen last, which new labels start with (S16).
+    @ObservationIgnored private var lastStock = LabelStock.white
 
     /// The working label kept in UserDefaults before S9; moved into the library on first launch.
     private static let legacyWorkingLabelKey = "workingLabel"
     private static let openLabelKey = "openLabelID"
+    private static let lastStockKey = "lastStock"
     /// Typing and drags change the label many times a second; the library copy is written after a pause.
     static let persistDelay = Duration.milliseconds(500)
     private static let log = Logger(subsystem: "tools.reekon.labeler", category: "editor")
@@ -47,6 +50,9 @@ final class LabelEditor {
         self.document = LayoutEngine.normalized(document ?? LabelDocument())
         self.undoManager = undoManager
         self.bitmap = Bitmap(width: 0, height: 0)
+        if persistsWorkingLabel {
+            lastStock = UserDefaults.standard.string(forKey: Self.lastStockKey).flatMap(LabelStock.init) ?? .white
+        }
         if document == nil, persistsWorkingLabel { reopenLastLabel() }
         // What the editor starts with is not an edit: a blank label joins the library on its first change.
         if savedDocument == nil { savedDocument = self.document }
@@ -303,6 +309,15 @@ final class LabelEditor {
         commit(doc, action: "Rotate Label")
     }
 
+    /// Sets this label's stock colour, and the colour new labels start with (S16).
+    func setStock(_ stock: LabelStock) {
+        lastStock = stock
+        if persistsWorkingLabel { UserDefaults.standard.set(stock.rawValue, forKey: Self.lastStockKey) }
+        var doc = document
+        doc.stock = stock
+        commit(doc, action: "Label Colour")
+    }
+
     func setGrid(_ grid: GridStep) {
         var doc = document
         doc.grid = grid
@@ -323,9 +338,10 @@ final class LabelEditor {
         refresh()
     }
 
-    /// A blank label with the current size and grid, added to the library at once (S9).
+    /// A blank label with the current size and grid and the last stock colour, added to the library at once (S9).
     func newLabel() {
-        let blank = LabelDocument(size: document.size, orientation: document.orientation, grid: document.grid)
+        let blank = LabelDocument(size: document.size, orientation: document.orientation, grid: document.grid,
+                                  stock: lastStock)
         do {
             guard let library else { return load(blank, libraryID: nil, name: nil) }
             saveNow()
@@ -358,7 +374,7 @@ final class LabelEditor {
         saveNow()
         do {
             try library.saveTemplate(document, name: libraryName ?? LabelLibrary.name(for: document),
-                                     thumbnailPNG: image.flatMap(PictureImport.pngData))
+                                     thumbnailPNG: thumbnailPNG)
         } catch {
             Self.log.error("Save as template failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -372,7 +388,8 @@ final class LabelEditor {
         persistTask?.cancel()
         savedDocument = document
         libraryID = nil
-        load(LabelDocument(size: document.size, orientation: document.orientation, grid: document.grid),
+        load(LabelDocument(size: document.size, orientation: document.orientation, grid: document.grid,
+                                  stock: lastStock),
              libraryID: nil, name: nil)
     }
 
@@ -381,7 +398,7 @@ final class LabelEditor {
         persistTask?.cancel()
         persistTask = nil
         guard let library, document != savedDocument else { return }
-        let thumbnail = image.flatMap(PictureImport.pngData)
+        let thumbnail = thumbnailPNG
         do {
             if let id = libraryID {
                 guard let name = try library.autosave(document, id: id, thumbnailPNG: thumbnail) else {
@@ -402,6 +419,11 @@ final class LabelEditor {
     }
 
     // MARK: Internals
+
+    /// The library thumbnail: the label as printed, on its stock colour (S16).
+    private var thumbnailPNG: Data? {
+        image.flatMap { PictureImport.thumbnailPNG($0, stock: document.stock) }
+    }
 
     private func commit(_ newDocument: LabelDocument, action: String?) {
         let normalized = LayoutEngine.normalized(newDocument)

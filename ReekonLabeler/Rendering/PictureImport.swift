@@ -36,6 +36,20 @@ nonisolated enum PictureImport {
         return PictureContent(pngData: png, pixelWidth: width, pixelHeight: height)
     }
 
+    /// A greyscale label image as a colour PNG on `stock`: white becomes the stock colour, black stays black.
+    static func thumbnailPNG(_ image: CGImage, stock: LabelStock) -> Data? {
+        guard stock != .white else { return pngData(image) }
+        let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        context.setFillColor(red: stock.rgb.red, green: stock.rgb.green, blue: stock.rgb.blue, alpha: 1)
+        context.fill(rect)
+        context.setBlendMode(.multiply)
+        context.draw(image, in: rect)
+        return context.makeImage().flatMap(pngData)
+    }
+
     static func pngData(_ image: CGImage) -> Data? {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)

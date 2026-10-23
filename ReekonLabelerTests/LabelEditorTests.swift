@@ -157,4 +157,22 @@ struct LabelEditorTests {
         #expect(abs(element.widthMM - (autoWidth + 10).rounded()) <= 1)
         #expect(abs(try #require(editor.layouts[id]).contentSizeMM.width - element.widthMM) < 0.001)
     }
+
+    // MARK: S16 — label stock colour
+
+    @Test func newLabelKeepsLastStockColour() {
+        let undo = makeUndo()
+        let editor = LabelEditor(document: LabelDocument(), undoManager: undo, persistsWorkingLabel: false)
+        editor.setStock(.yellow)
+        #expect(editor.document.stock == .yellow)
+
+        editor.newLabel()
+        #expect(editor.document.stock == .yellow)
+
+        undo.removeAllActions()
+        editor.setStock(.white)
+        editor.setStock(.yellow)
+        undo.undo()
+        #expect(editor.document.stock == .white)
+    }
 }

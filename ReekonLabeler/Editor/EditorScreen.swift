@@ -149,7 +149,8 @@ struct EditorScreen: View {
     private func sheetContent(_ sheet: Sheet) -> some View {
         switch sheet {
         case .labelSize:
-            LabelSizeSheet(current: editor.document.size) { editor.setSize($0) }
+            LabelSizeSheet(current: editor.document.size, stock: editor.document.stock,
+                           choose: { editor.setSize($0) }, chooseStock: { editor.setStock($0) })
         case .fonts:
             FontPickerSheet(current: editor.selectedElements.compactMap(\.textContent).first?.font ?? .standard) { family in
                 editor.updateSelected(action: "Font") { element in

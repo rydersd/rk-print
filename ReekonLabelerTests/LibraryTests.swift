@@ -236,4 +236,21 @@ struct LibraryTests {
 
         #expect(try library.templates().map(\.name) == ["BINS"])
     }
+
+    // MARK: S16 — label stock colour
+
+    @Test func stockColourRoundTrips() throws {
+        let library = try makeLibrary()
+        var yellow = twoBlockDocument
+        yellow.stock = .yellow
+        let id = try library.save(yellow, name: "Yellow")
+        #expect(try library.load(id)?.stock == .yellow)
+
+        // A label saved before S16 has no stock key.
+        let s15JSON = """
+        {"size":{"headMM":50,"feedMM":30,"feedDots":240},"orientation":"headNative","grid":1,"elements":[]}
+        """
+        let old = try JSONDecoder().decode(LabelDocument.self, from: Data(s15JSON.utf8))
+        #expect(old.stock == .white)
+    }
 }
