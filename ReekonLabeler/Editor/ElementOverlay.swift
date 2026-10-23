@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// One element's hit area on the canvas: tap to select (and type, for text), drag to move the selection (or
-/// scale it, with the Scale tool), drag the handle to change width. Text and pictures are drawn by the
+/// One element's hit area on the canvas: tap to select (and type, for text), drag with Move to move the selection
+/// (or with Scale to scale it), drag the handle to change width. Text and pictures are drawn by the
 /// bitmap underneath; the inline field's text is clear so only the caret and selection show over it.
 struct ElementOverlay: View {
     let editor: LabelEditor
@@ -45,7 +45,8 @@ struct ElementOverlay: View {
         .frame(width: screen.width, height: screen.height)
         .offset(x: screen.minX, y: screen.minY)
         .onTapGesture { editor.tap(element.id) }
-        .gesture(move)
+        // Only the Adjust tools arrange things (S13); in Type a drag on text belongs to the text field.
+        .gesture(move, isEnabled: editor.tool.selects)
     }
 
     private var accessibilityText: String {

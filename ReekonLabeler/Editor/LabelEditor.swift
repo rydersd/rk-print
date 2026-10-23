@@ -458,6 +458,18 @@ final class LabelEditor {
                 let group = UUID()
                 for index in items.indices { items[index].groupID = group }
             }
+            // A template from a bigger label: move the items together onto this one before `commit` clamps
+            // each on its own, which would squash their spacing against the edge. Measured on the template's
+            // own label, since layout on this one would already have clamped them.
+            let printable = document.geometry.printableRect
+            let union = items.map { LayoutEngine.layout($0, in: template.geometry).frameMM }
+                .reduce(CGRect.null) { $0.union($1) }
+            let dx = Self.shiftInto(union.minX...union.maxX, printable.minX...printable.maxX)
+            let dy = Self.shiftInto(union.minY...union.maxY, printable.minY...printable.maxY)
+            for index in items.indices {
+                items[index].originMM.x += dx
+                items[index].originMM.y += dy
+            }
             var doc = document
             doc.elements += items
             commit(doc, action: "Insert Template")
@@ -467,6 +479,14 @@ final class LabelEditor {
         } catch {
             Self.log.error("Insert template failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// How far to move `span` so it lies inside `room`; a span too big for the room starts at its start.
+    private static func shiftInto(_ span: ClosedRange<Double>, _ room: ClosedRange<Double>) -> Double {
+        if span.lowerBound < room.lowerBound || span.upperBound - span.lowerBound > room.upperBound - room.lowerBound {
+            return room.lowerBound - span.lowerBound
+        }
+        return min(room.upperBound - span.upperBound, 0)
     }
 
     /// Stores a copy of the current label as a template named like the label (S11).

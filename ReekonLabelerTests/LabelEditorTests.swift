@@ -277,4 +277,26 @@ struct LabelEditorTests {
         #expect(editor.document.elements.isEmpty)
         #expect(editor.selection.isEmpty)
     }
+
+    /// A template from a taller label lands on a short one moved as a whole, not squashed edge by edge.
+    @Test func insertTemplateFromBiggerLabelKeepsSpacing() throws {
+        let container = try ModelContainer(for: LabelLibrary.schema,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let library = LabelLibrary(context: ModelContext(container))
+        let template = LabelDocument(size: .large, elements: [
+            .text("SHELF", originMM: CGPoint(x: 2, y: 40), widthMM: 20),
+            .text("A", originMM: CGPoint(x: 2, y: 52), widthMM: 10),
+        ])
+        let templateID = try library.saveTemplate(template, name: "Tall")
+        let editor = LabelEditor(document: LabelDocument(size: .small), undoManager: nil,
+                                 persistsWorkingLabel: false, library: library)
+
+        editor.insertTemplate(templateID)
+
+        let ys = editor.document.elements.map(\.originMM.y)
+        #expect(ys.count == 2)
+        #expect(abs(ys[1] - ys[0] - 12) < 0.01)
+        let printable = editor.document.geometry.printableRect
+        #expect(editor.document.elements.allSatisfy { printable.contains(editor.layouts[$0.id]!.frameMM) })
+    }
 }
