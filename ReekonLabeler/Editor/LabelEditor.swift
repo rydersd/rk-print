@@ -443,6 +443,32 @@ final class LabelEditor {
         }
     }
 
+    /// Adds template `id`'s items to this label as one selected group, with fresh ids, kept on the label
+    /// (S15). One undo step.
+    func insertTemplate(_ id: UUID) {
+        guard let library else { return }
+        do {
+            guard let template = try library.load(id) else {
+                Self.log.error("Template is missing from the library")
+                return
+            }
+            var items = template.withFreshIDs().elements
+            guard !items.isEmpty else { return }
+            if items.count > 1 {
+                let group = UUID()
+                for index in items.indices { items[index].groupID = group }
+            }
+            var doc = document
+            doc.elements += items
+            commit(doc, action: "Insert Template")
+            selection = Set(items.map(\.id))
+            editingID = nil
+            focusedMemberID = nil
+        } catch {
+            Self.log.error("Insert template failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// Stores a copy of the current label as a template named like the label (S11).
     func saveAsTemplate() {
         guard let library else { return }

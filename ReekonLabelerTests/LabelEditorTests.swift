@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftData
 import Testing
 @testable import Labeler
 
@@ -230,5 +231,50 @@ struct LabelEditorTests {
         #expect(editor.document.geometry.printableRect.contains(frame))
         undo.undo()
         #expect(editor.document.element(block.id)?.textContent?.pointSize == 14)
+    }
+
+    // MARK: S15 — insert a template
+
+    private func libraryWithTemplate() throws -> (LabelLibrary, UUID, LabelDocument) {
+        let container = try ModelContainer(for: LabelLibrary.schema,
+                                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let library = LabelLibrary(context: ModelContext(container))
+        let template = LabelDocument(elements: [
+            .text("SHELF", originMM: CGPoint(x: 2, y: 2), widthMM: 20),
+            .text("A", originMM: CGPoint(x: 2, y: 10), widthMM: 10),
+        ])
+        return (library, try library.saveTemplate(template, name: "Shelf"), template)
+    }
+
+    @Test func insertTemplateAddsGroupedCopy() throws {
+        let (library, templateID, template) = try libraryWithTemplate()
+        let existing = LabelElement.text("BOLTS", originMM: CGPoint(x: 25, y: 2), widthMM: 15)
+        let editor = LabelEditor(document: LabelDocument(elements: [existing]), undoManager: nil,
+                                 persistsWorkingLabel: false, library: library)
+
+        editor.insertTemplate(templateID)
+
+        let inserted = editor.document.elements.filter { $0.id != existing.id }
+        #expect(inserted.count == 2)
+        #expect(Set(inserted.map(\.id)).isDisjoint(with: template.elements.map(\.id)))
+        #expect(inserted.map(\.textContent?.text) == ["SHELF", "A"])
+        let group = try #require(inserted.first?.groupID)
+        #expect(inserted.allSatisfy { $0.groupID == group })
+        #expect(editor.selection == Set(inserted.map(\.id)))
+        #expect(editor.document.element(existing.id)?.groupID == nil)
+        #expect(try library.load(templateID) == template)
+    }
+
+    @Test func insertTemplateIsUndoable() throws {
+        let (library, templateID, _) = try libraryWithTemplate()
+        let undo = makeUndo()
+        let editor = LabelEditor(document: LabelDocument(), undoManager: undo, persistsWorkingLabel: false,
+                                 library: library)
+
+        editor.insertTemplate(templateID)
+        #expect(editor.document.elements.count == 2)
+        undo.undo()
+        #expect(editor.document.elements.isEmpty)
+        #expect(editor.selection.isEmpty)
     }
 }

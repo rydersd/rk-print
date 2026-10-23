@@ -1,5 +1,6 @@
 import os
 import PhotosUI
+import SwiftData
 import SwiftUI
 
 /// The whole app on one screen: the label canvas, the selection's inspector, and the tools.
@@ -15,6 +16,7 @@ struct EditorScreen: View {
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var cropping: CropRequest?
     @State private var showsPhotos = false
+    @Query(filter: #Predicate<SavedLabel> { $0.isTemplate }, sort: \SavedLabel.name) private var templates: [SavedLabel]
 
     private enum Sheet: String, Identifiable {
         case labelSize, fonts, printer, library
@@ -86,6 +88,7 @@ struct EditorScreen: View {
                 .accessibilityIdentifier("adjustMenu")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
+            insertTemplateMenu
             Button("Undo", systemImage: "arrow.uturn.backward") { undoManager.undo() }
                 .disabled(!canUndo)
             Button("Redo", systemImage: "arrow.uturn.forward") { undoManager.redo() }
@@ -117,6 +120,20 @@ struct EditorScreen: View {
             .accessibilityIdentifier("newLabelButton")
             printButton
         }
+    }
+
+    /// + (S15): adds a template's items to this label. With no templates yet, it says how to make one.
+    private var insertTemplateMenu: some View {
+        Menu("Insert Template", systemImage: "plus") {
+            if templates.isEmpty {
+                Text("No templates yet. Long-press New Label and choose Save as Template.")
+            } else {
+                ForEach(templates) { template in
+                    Button(template.name) { editor.insertTemplate(template.id) }
+                }
+            }
+        }
+        .accessibilityIdentifier("insertTemplateMenu")
     }
 
     /// A dropdown of tools (S13). Its icon is the current tool when that tool is in this menu, tinted so
