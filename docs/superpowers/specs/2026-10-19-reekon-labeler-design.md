@@ -511,6 +511,7 @@ Named tests: none (an asset). Evidence: the 1024 px icon image shown to Ryder, a
 
 - **Tape-measure field**: connect to a T1/T1M/T1R (SDK Section I), insert the received or live measurement
   into a text block in the user's chosen unit. Needs its own spec.
+  Spec drafted 2026-10-23: `2026-10-23-t1-tape-measure-design.md` (S18, S19).
 - **Stock auto-detect spike**: log `0xAE02` notifications while swapping rolls; build detection only if the
   bytes reliably identify the stock.
 - Other elements (QR/barcodes, icons, lines). (Templates moved to S11 on 2026-10-20.)
