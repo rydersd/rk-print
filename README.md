@@ -10,13 +10,17 @@ on a canvas the size of the real label, and what the canvas shows is exactly wha
   the label.
 - **Stay on the label.** Blocks snap to a grid (0.5, 1 or 2 mm, or off), and nothing can be moved or sized
   off the printable area.
+- **Two tool menus.** Input (Type, Draw, Photo) makes things; Adjust (Move, Scale) arranges them. Text
+  boxes fit their text.
 - **Pictures.** Add a photo, crop it, and choose dithered or line-art rendering with a brightness control.
+- **Scribbles.** Draw on the label with your finger. Strokes until you pause make one scribble, which you can
+  move and scale like anything else.
 - **Arrange.** Select several items, group them, and rotate an item or a group by 90°. Turn the whole label
   to work on it either way round. Undo and redo cover every edit.
-- **Label sizes.** 30 × 50 mm and 50 × 80 mm presets, or a custom size.
+- **Label sizes and colours.** 30 × 50 mm and 50 × 80 mm presets, or a custom size, on white or yellow stock.
 - **Library.** Every label saves itself as you edit and is named after its first line of text until you
   rename it. Drag one label onto another to make a folder, the way you would on the Home Screen. Save any
-  label as a template and start new labels from it.
+  label as a template, start new labels from it, or add its items to the label you are on with **+**.
 - **Print.** Finds the P1L over Bluetooth LE, with no pairing step, and prints the label as a 203 dpi
   black-and-white image.
 
