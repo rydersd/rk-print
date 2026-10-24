@@ -58,6 +58,29 @@ final class EditorUITests: XCTestCase {
                       "tapping one member should select the whole group")
     }
 
+    /// S20 acceptance 2: one tap on a cell of a freshly added table puts the caret in that cell, and typing fills it.
+    func testTapCellShowsCaret() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["labelCanvas"].waitForExistence(timeout: 10))
+        app.buttons["inputMenu"].tap()
+        app.buttons["addTableButton"].tap()
+
+        let table = app.descendants(matching: .any)["block-0"]
+        XCTAssertTrue(table.waitForExistence(timeout: 3))
+        // Title, then two rows: the middle third is row 0, and values sit right of the divider.
+        table.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)).tap()
+        let cell = app.textFields["tableCell-0-value-0"]
+        guard cell.waitForExistence(timeout: 3) else {
+            attachHierarchy(app)
+            return XCTFail("one tap on a cell should open its field")
+        }
+        XCTAssertTrue((cell.value(forKey: "hasKeyboardFocus") as? Bool) == true, "the tapped cell should have the caret")
+        app.typeText("12")
+        XCTAssertTrue((table.value as? String)?.contains(" 12") == true, "typing should fill the tapped cell")
+    }
+
     /// Type tool: a tap high on the label adds "SHELF A", a tap low adds "M6". The canvas element spans the
     /// whole editing area with the label centred in it, so both taps sit near the middle.
     private func typeTwoBlocks(_ app: XCUIApplication) throws {
