@@ -61,6 +61,27 @@ nonisolated enum TableLayout {
 
     static func font(for cell: TableCell) -> FontSpec { cell == .title ? titleFont : bodyFont }
 
+    /// A cell's text size (S26): the table's size, or smaller in 0.5 pt steps until its one line fits inside the
+    /// cell's padding, down to the smallest size. Other cells are not affected.
+    static func cellPointSize(_ table: TableContent, cell: TableCell, tablePointSize: Double,
+                              cellWidthMM: Double) -> Double {
+        let room = cellWidthMM * LabelGeometry.dotsPerMM - 2 * paddingDots
+        var size = tablePointSize
+        while size > TextContent.minimumPointSize, textWidthDots(table[cell], cell: cell, pointSize: size) > room {
+            size -= fitStep
+        }
+        return max(size, TextContent.minimumPointSize)
+    }
+
+    /// The width of a cell's text on one line, in dots.
+    static func textWidthDots(_ text: String, cell: TableCell, pointSize: Double) -> Double {
+        guard !text.isEmpty else { return 0 }
+        let font = FontCatalog.ctFont(font(for: cell), pointSize: pointSize * LayoutEngine.dotsPerPoint)
+        let attributes = [kCTFontAttributeName: font] as CFDictionary
+        let line = CTLineCreateWithAttributedString(CFAttributedStringCreate(nil, text as CFString, attributes))
+        return CTLineGetTypographicBounds(line, nil, nil, nil)
+    }
+
     static func alignment(for cell: TableCell) -> TextAlignmentOption {
         switch cell {
         case .title: .center

@@ -117,7 +117,12 @@ nonisolated enum LabelRenderer {
 
             let text = table[cell]
             guard !text.isEmpty else { continue }
-            let font = FontCatalog.ctFont(TableLayout.font(for: cell), pointSize: pointSize * LayoutEngine.dotsPerPoint)
+            // A long entry shrinks to fit its cell (S26), on the same baseline as full-size text in the row.
+            let rowFont = FontCatalog.ctFont(TableLayout.font(for: cell),
+                                             pointSize: pointSize * LayoutEngine.dotsPerPoint)
+            let cellSize = TableLayout.cellPointSize(table, cell: cell, tablePointSize: pointSize,
+                                                     cellWidthMM: frameMM.width)
+            let font = FontCatalog.ctFont(TableLayout.font(for: cell), pointSize: cellSize * LayoutEngine.dotsPerPoint)
             let ctLine = CTLineCreateWithAttributedString(CFAttributedStringCreate(nil, text as CFString, [
                 kCTFontAttributeName: font, kCTForegroundColorAttributeName: CGColor(gray: 0, alpha: 1),
             ] as CFDictionary))
@@ -130,7 +135,7 @@ nonisolated enum LabelRenderer {
             }
             context.saveGState()
             context.clip(to: inner)
-            context.textPosition = CGPoint(x: x.rounded(), y: (inner.maxY - CTFontGetAscent(font)).rounded())
+            context.textPosition = CGPoint(x: x.rounded(), y: (inner.maxY - CTFontGetAscent(rowFont)).rounded())
             CTLineDraw(ctLine, context)
             context.restoreGState()
         }

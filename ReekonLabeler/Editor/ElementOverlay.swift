@@ -99,13 +99,17 @@ struct ElementOverlay: View {
     /// printed text.
     private func tableFields(_ table: TableContent) -> some View {
         let size = layout?.contentSizeMM ?? CGSize(width: element.widthMM, height: 4)
-        let pointSize = (layout?.effectivePointSize ?? table.pointSize) * 25.4 / 72 * scale
+        let tablePointSize = layout?.effectivePointSize ?? table.pointSize
         let padding = TableLayout.paddingDots / LabelGeometry.dotsPerMM * scale
         return ZStack(alignment: .topLeading) {
             ForEach(TableLayout.cells(table, sizeMM: size), id: \.cell) { cell, frame in
                 TextField("", text: Binding(get: { table[cell] },
                                             set: { editor.setTableCell(cell, to: $0, for: element.id) }))
-                    .font(Font(FontCatalog.uiFont(TableLayout.font(for: cell), pointSize: pointSize)))
+                    // Each cell shrinks on its own to fit (S26), as the print does.
+                    .font(Font(FontCatalog.uiFont(TableLayout.font(for: cell),
+                                                  pointSize: TableLayout.cellPointSize(
+                                                      table, cell: cell, tablePointSize: tablePointSize,
+                                                      cellWidthMM: frame.width) * 25.4 / 72 * scale)))
                     .multilineTextAlignment(TableLayout.alignment(for: cell).textAlignment)
                     .foregroundStyle(.clear)
                     .tint(Theme.selection)
