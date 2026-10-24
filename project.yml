@@ -46,7 +46,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Labeler
-        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Labeler uses Bluetooth to print on your REEKON P1L."
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Labeler uses Bluetooth to print on your REEKON P1L and read your REEKON tape measure."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

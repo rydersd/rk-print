@@ -9,6 +9,7 @@ struct EditorScreen: View {
     private let library: LabelLibrary
     @State private var editor: LabelEditor
     @State private var printer = P1LPrinter()
+    @State private var tape = T1Tape()
     @State private var undoManager: UndoManager
     @State private var canUndo = false
     @State private var canRedo = false
@@ -19,7 +20,7 @@ struct EditorScreen: View {
     @Query(filter: #Predicate<SavedLabel> { $0.isTemplate }, sort: \SavedLabel.name) private var templates: [SavedLabel]
 
     private enum Sheet: String, Identifiable {
-        case labelSize, fonts, printer, library
+        case labelSize, fonts, printer, library, tape
         var id: String { rawValue }
     }
 
@@ -70,6 +71,7 @@ struct EditorScreen: View {
             // One undo history for the editor and the library, so the library's Undo also covers deletes.
             library.undoManager = undoManager
             if printer.hasSavedPrinter { printer.activate() }
+            if tape.hasSavedTool { tape.activate() }
         }
         // Don't lose the last half second of edits if the app is closed right after them.
         .onChange(of: scenePhase) { _, phase in if phase != .active { editor.saveNow() } }
@@ -150,6 +152,8 @@ struct EditorScreen: View {
                 Button("Photo", systemImage: "photo.badge.plus") { showsPhotos = true }
                 Button("Table", systemImage: "tablecells") { editor.addTable() }
                     .accessibilityIdentifier("addTableButton")
+                Button("Tape", systemImage: "ruler") { sheet = .tape }
+                    .accessibilityIdentifier("tapeButton")
             }
         } label: {
             Label(title, systemImage: shown.systemImage)
@@ -192,6 +196,8 @@ struct EditorScreen: View {
             }
         case .printer:
             PrinterSheet(printer: printer)
+        case .tape:
+            TapeSheet(tape: tape)
         case .library:
             LibraryView(library: library, openID: editor.libraryID,
                         open: { id, name, doc in editor.load(doc, libraryID: id, name: name) },
