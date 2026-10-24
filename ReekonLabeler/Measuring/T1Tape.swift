@@ -29,6 +29,8 @@ final class T1Tape: NSObject {
 
     private(set) var state = State.idle
     private(set) var nearby: [NearbyTool] = []
+    /// Rebuilt on each connect: Request All sends every saved measurement again (S19).
+    private(set) var measurements = MeasurementList()
 
     var toolName: String? {
         switch state {
@@ -259,6 +261,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
             return
         }
         // Every saved measurement, then each new one the moment it is saved.
+        measurements.removeAll()
         peripheral.writeValue(T1Protocol.message(opcode: T1Protocol.requestAllOpcode), for: characteristic,
                               type: .withResponse)
         savedPeripheralID = peripheral.identifier
@@ -274,7 +277,16 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard let value = characteristic.value else { return }
-        if characteristic.uuid == Self.versionID {
+        if characteristic.uuid == Self.commID {
+            let deviceID = deviceIDs[peripheral.identifier] ?? savedDeviceID ?? peripheral.identifier.uuidString
+            // Other opcodes (newer firmware, items from a T1M) are ignored.
+            guard let measurement = T1Protocol.measurement(from: value, deviceID: deviceID) else { return }
+            let isNew = measurements.add(measurement)
+            Self.log.info("""
+                Measurement \(measurement.letter, privacy: .public) \(measurement.positionUM) µm \
+                uuid \(measurement.uuid) flags \(measurement.flags)\(isNew ? "" : " (repeat)", privacy: .public)
+                """)
+        } else if characteristic.uuid == Self.versionID {
             let version = value.count >= 4 ? value.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) } : 0
             Self.log.info("Protocol version \(UInt32(littleEndian: version))")
         }

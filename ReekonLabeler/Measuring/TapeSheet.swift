@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Connects the T1 Tomahawk (S18). The chosen tape is remembered and reconnects whenever it wakes.
+/// Connects the T1 Tomahawk (S18) and lists its measurements (S19). The chosen tape is remembered and
+/// reconnects whenever it wakes.
 struct TapeSheet: View {
     let tape: T1Tape
+    @AppStorage("measurementUnit") private var unit = MeasurementUnit.fractionalInches
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -16,6 +18,7 @@ struct TapeSheet: View {
                     }
                 }
                 if !tape.isConnected { nearbySection }
+                measurementsSection
             }
             .navigationTitle("Tape")
             .navigationBarTitleDisplayMode(.inline)
@@ -50,6 +53,30 @@ struct TapeSheet: View {
             }
         } footer: {
             Text("Press a button on the T1 to wake it. It doesn't need pairing in Settings.")
+        }
+    }
+
+    private var measurementsSection: some View {
+        Section {
+            Picker("Unit", selection: $unit) {
+                ForEach(MeasurementUnit.allCases) { Text($0.title).tag($0) }
+            }
+            ForEach(tape.measurements.entries) { measurement in
+                HStack {
+                    Text(measurement.letter).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(MeasurementFormat.format(positionUM: measurement.positionUM, unit: unit))
+                        .monospacedDigit()
+                }
+                .accessibilityElement(children: .combine)
+            }
+        } header: {
+            Text("Measurements")
+        } footer: {
+            if tape.measurements.entries.isEmpty {
+                Text(tape.isConnected ? "Save a measurement on the T1 and it appears here."
+                                      : "Connect your T1 to see the measurements saved on it.")
+            }
         }
     }
 
