@@ -113,7 +113,9 @@ Unit boundaries:
 - **Shrink to fit**: text wraps within the block width. If the wrapped height would pass the bottom of
   the printable area, the effective size steps down in 0.5 pt steps until it fits (floor 4 pt). The
   inspector shows "24 pt (fits at 17)". The requested size is kept, so deleting text grows it back.
-- **Label change**: switching size or orientation re-clamps and refits every block.
+- **Label change**: switching size re-clamps and refits every block. Switching orientation turns the content
+  with the label (amended 2026-10-23, Ryder: "objects rotate with the page and maintain their relative
+  position, rotation and scale"; S22). Before this, orientation also re-clamped, which moved the content.
 
 ## Stories
 
@@ -506,6 +508,29 @@ Added 2026-10-23 on Ryder's request: "[R]" on yellow, the R in Avenir Next.
 Acceptance: the app icon shows "[R]" in Avenir Next on REEKON yellow, at every size iOS asks for.
 
 Named tests: none (an asset). Evidence: the 1024 px icon image shown to Ryder, and the build on the phone.
+
+### S22 — Turn Label turns the content with it
+
+Added 2026-10-23. Ryder: "i just rotated the lable once and the content centered, lost it's place" … "objects
+rotate with the page and maintain thier relative position, rotation and scale."
+
+As Ryder, I tap Turn Label and see the same label turned on screen: every item keeps its place on the label,
+its own rotation relative to the label, and its size.
+
+Acceptance:
+1. Turn Label turns the label and everything on it as one piece: head-native → rotated turns it 90°
+   anticlockwise on screen, rotated → head-native turns it back. Nothing is moved, clamped or refitted.
+2. The printed label does not change: the printer already turns a rotated label's bitmap clockwise.
+3. Turning twice gives back the same label. One Undo undoes one turn.
+
+Named tests:
+- `LabelEditorTests.turnLabelPrintsTheSameLabel`: text near a corner, a turned text block and a scribble;
+  after Turn Label the head bitmap sent to the printer is unchanged.
+- `LabelEditorTests.turnLabelTwiceRestoresLayout`: two turns give back the same elements; one Undo after one
+  turn gives back the original.
+
+Test plan (RC): a table and a group on 30 × 50 and 50 × 80; a picture; the print on paper before and after a
+turn; turning while a text block is being edited.
 
 ## Later (not in this spec)
 

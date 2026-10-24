@@ -381,8 +381,23 @@ final class LabelEditor {
         commit(doc, action: "Label Size")
     }
 
+    /// Turns the label and everything on it as one piece (S22), so the print does not change. The printer
+    /// turns a rotated label's bitmap clockwise, so head-native → rotated turns the content anticlockwise and
+    /// rotated → head-native turns it back. Footprints map from printable area to printable area exactly.
     func setOrientation(_ orientation: Orientation) {
+        guard orientation != document.orientation else { return }
         var doc = document
+        let labelSize = doc.geometry.labelSizeMM
+        let anticlockwise = orientation == .rotated
+        for index in doc.elements.indices {
+            guard let frame = layouts[doc.elements[index].id]?.frameMM else { continue }
+            // Anticlockwise (y down): (x, y) → (y, W − x). Clockwise: (x, y) → (H − y, x).
+            doc.elements[index].originMM = anticlockwise
+                ? CGPoint(x: frame.minY, y: labelSize.width - frame.maxX)
+                : CGPoint(x: labelSize.height - frame.maxY, y: frame.minX)
+            let rotation = doc.elements[index].rotation
+            doc.elements[index].rotation = anticlockwise ? rotation.next.next.next : rotation.next
+        }
         doc.orientation = orientation
         commit(doc, action: "Rotate Label")
     }
