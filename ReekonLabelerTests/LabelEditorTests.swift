@@ -352,4 +352,20 @@ struct LabelEditorTests {
         editor.setOrientation(.headNative)
         #expect(editor.document == original)
     }
+
+    /// Codex review: auto-width text wrapped by the label's edge keeps its lines when the label turns.
+    @Test func turnLabelKeepsEdgeWrappedAutoWidthText() throws {
+        let doc = LabelDocument(size: .small, orientation: .headNative, grid: .off, elements: [
+            LabelElement(originMM: CGPoint(x: 30, y: 2), widthMM: 10,
+                         content: .text(TextContent(text: "LONG SHELF NAME", autoWidth: true))),
+        ])
+        let editor = LabelEditor(document: doc, undoManager: makeUndo(), persistsWorkingLabel: false)
+        let original = try #require(editor.layouts[editor.document.elements[0].id])
+        let before = PrintJobEncoder.headBitmap(for: editor.document)
+
+        editor.setOrientation(.rotated)
+        #expect(inkBox(PrintJobEncoder.headBitmap(for: editor.document)) == inkBox(before))
+        editor.setOrientation(.headNative)
+        #expect(editor.layouts[editor.document.elements[0].id] == original)
+    }
 }

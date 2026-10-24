@@ -389,16 +389,26 @@ final class LabelEditor {
         var doc = document
         let labelSize = doc.geometry.labelSizeMM
         let anticlockwise = orientation == .rotated
+        doc.orientation = orientation
+        let turnedGeometry = doc.geometry
         for index in doc.elements.indices {
-            guard let frame = layouts[doc.elements[index].id]?.frameMM else { continue }
+            guard let layout = layouts[doc.elements[index].id] else { continue }
+            let frame = layout.frameMM
             // Anticlockwise (y down): (x, y) → (y, W − x). Clockwise: (x, y) → (H − y, x).
             doc.elements[index].originMM = anticlockwise
                 ? CGPoint(x: frame.minY, y: labelSize.width - frame.maxX)
                 : CGPoint(x: labelSize.height - frame.maxY, y: frame.minX)
             let rotation = doc.elements[index].rotation
             doc.elements[index].rotation = anticlockwise ? rotation.next.next.next : rotation.next
+            // Auto-width text measures its room from its origin to the far edge, which the turn changes; if
+            // that would rewrap it, fix its width where it is, as dragging the width handle does (S12).
+            if doc.elements[index].textContent?.autoWidth == true,
+               LayoutEngine.layout(doc.elements[index], in: turnedGeometry).contentSizeMM.width
+                != layout.contentSizeMM.width {
+                doc.elements[index].textContent?.autoWidth = false
+                doc.elements[index].widthMM = layout.contentSizeMM.width
+            }
         }
-        doc.orientation = orientation
         commit(doc, action: "Rotate Label")
     }
 

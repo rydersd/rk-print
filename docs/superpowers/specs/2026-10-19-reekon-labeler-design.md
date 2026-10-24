@@ -528,6 +528,8 @@ Named tests:
   after Turn Label the head bitmap sent to the printer is unchanged.
 - `LabelEditorTests.turnLabelTwiceRestoresLayout`: two turns give back the same elements; one Undo after one
   turn gives back the original.
+- `LabelEditorTests.turnLabelKeepsEdgeWrappedAutoWidthText` (Codex review): auto-width text wrapped by the
+  label's edge prints the same after a turn and lays out the same after two; its width is fixed where it was.
 
 Test plan (RC): a table and a group on 30 × 50 and 50 × 80; a picture; the print on paper before and after a
 turn; turning while a text block is being edited.
