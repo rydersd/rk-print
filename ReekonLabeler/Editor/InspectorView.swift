@@ -18,6 +18,7 @@ struct InspectorView: View {
                 if let element = editor.inspectedElement, element.table != nil {
                     Button("Add Row", systemImage: "plus.rectangle") { editor.addTableRow(to: element.id) }
                         .buttonStyle(.bordered)
+                        .disabled(!editor.canAddTableRow(to: element.id))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("addTableRowButton")
                 }

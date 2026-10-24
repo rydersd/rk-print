@@ -34,6 +34,13 @@ nonisolated enum TableLayout {
         return max(size, TextContent.minimumPointSize)
     }
 
+    /// Whether one more row still fits `availableMM` at the smallest text size, so a table never outgrows the label.
+    static func canAddRow(_ table: TableContent, availableMM: Double) -> Bool {
+        var grown = table
+        grown.rows.append(TableRow())
+        return heightMM(grown, pointSize: TextContent.minimumPointSize) <= availableMM
+    }
+
     /// The x of the line between labels and values, in mm.
     static func dividerMM(widthMM: Double) -> Double {
         (widthMM * LabelGeometry.dotsPerMM * labelColumnFraction).rounded() / LabelGeometry.dotsPerMM

@@ -182,8 +182,15 @@ final class LabelEditor {
     }
 
     /// Adds an empty row at the bottom of a table (S20).
+    /// Whether Add Row has room: the grown table must still fit across the label at the smallest text size.
+    func canAddTableRow(to id: UUID) -> Bool {
+        guard let element = document.element(id), let table = element.table else { return false }
+        let printable = document.geometry.printableRect
+        return TableLayout.canAddRow(table, availableMM: element.rotation.isSideways ? printable.width : printable.height)
+    }
+
     func addTableRow(to id: UUID) {
-        guard document.element(id)?.table != nil else { return }
+        guard canAddTableRow(to: id) else { return }
         updateElement(id, action: "Add Row") { $0.table?.rows.append(TableRow()) }
     }
 

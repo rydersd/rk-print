@@ -48,7 +48,8 @@ nonisolated enum LayoutEngine {
             // Like text: shrinks to fit the cross space left below its top (S20).
             let top = clamp(originCross, crossMin, crossMax)
             pointSize = TableLayout.fittedPointSize(table, availableMM: crossMax - top)
-            height = TableLayout.heightMM(table, pointSize: pointSize)
+            // Never taller than the label: a table rotated onto the short side squeezes its rows instead.
+            height = min(TableLayout.heightMM(table, pointSize: pointSize), crossMax - crossMin)
             crossPosition = height >= crossMax - crossMin ? crossMin : clamp(top, crossMin, crossMax - height)
         case .picture, .scribble:
             // Keep proportions: a picture or scribble too tall for the cross space narrows instead.
