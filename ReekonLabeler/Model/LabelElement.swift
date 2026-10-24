@@ -85,13 +85,61 @@ nonisolated struct ScribbleContent: Codable, Hashable, Sendable {
     }
 }
 
+/// One row of a table (S20): what was measured and its value, both as typed or inserted.
+nonisolated struct TableRow: Codable, Hashable, Sendable {
+    var label = ""
+    var value = ""
+}
+
+/// A cell of a table, for editing it in place.
+nonisolated enum TableCell: Hashable, Sendable {
+    case title
+    case label(Int)
+    case value(Int)
+
+    /// "title", "label-0", "value-0", for UI tests.
+    var accessibilityName: String {
+        switch self {
+        case .title: "title"
+        case .label(let row): "label-\(row)"
+        case .value(let row): "value-\(row)"
+        }
+    }
+}
+
+/// A little table (S20): a title row naming the thing, then label and value rows.
+nonisolated struct TableContent: Codable, Hashable, Sendable {
+    var title = ""
+    var rows = [TableRow(), TableRow()]
+    /// The size the user asked for. Layout may draw it smaller to fit, like text.
+    var pointSize = 12.0
+
+    subscript(cell: TableCell) -> String {
+        get {
+            switch cell {
+            case .title: title
+            case .label(let row): rows.indices.contains(row) ? rows[row].label : ""
+            case .value(let row): rows.indices.contains(row) ? rows[row].value : ""
+            }
+        }
+        set {
+            switch cell {
+            case .title: title = newValue
+            case .label(let row): if rows.indices.contains(row) { rows[row].label = newValue }
+            case .value(let row): if rows.indices.contains(row) { rows[row].value = newValue }
+            }
+        }
+    }
+}
+
 nonisolated enum ElementContent: Codable, Hashable, Sendable {
     case text(TextContent)
     case picture(PictureContent)
     case scribble(ScribbleContent)
+    case table(TableContent)
 }
 
-/// One thing on the label: text, a picture or a scribble. `originMM` is the top-left of its footprint (the box it
+/// One thing on the label: text, a picture, a scribble or a table. `originMM` is the top-left of its footprint (the box it
 /// covers once rotated); `widthMM` is the unrotated content width. Both are label-space mm.
 nonisolated struct LabelElement: Codable, Hashable, Sendable, Identifiable {
     var id = UUID()
@@ -128,12 +176,17 @@ nonisolated struct LabelElement: Codable, Hashable, Sendable, Identifiable {
         set { if let newValue, case .scribble = content { content = .scribble(newValue) } }
     }
 
+    var table: TableContent? {
+        get { if case .table(let table) = content { table } else { nil } }
+        set { if let newValue, case .table = content { content = .table(newValue) } }
+    }
+
     var isText: Bool { textContent != nil }
 
-    /// Height ÷ width for content that keeps its proportions (pictures and scribbles); nil for text.
+    /// Height ÷ width for content that keeps its proportions (pictures and scribbles); nil for text and tables.
     var aspect: Double? {
         switch content {
-        case .text: nil
+        case .text, .table: nil
         case .picture(let picture): picture.aspect
         case .scribble(let scribble): scribble.aspect
         }
