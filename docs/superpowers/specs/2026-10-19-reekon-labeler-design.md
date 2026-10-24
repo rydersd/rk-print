@@ -534,7 +534,7 @@ Named tests:
 Test plan (RC): a table and a group on 30 × 50 and 50 × 80; a picture; the print on paper before and after a
 turn; turning while a text block is being edited.
 
-## Proposed (S23–S28; not built until Ryder approves)
+## S23–S29 (approved by Ryder 2026-10-23: "approve")
 
 Rulings from Ryder, 2026-10-23:
 - "should be able to tap to select, tap again to deselect objects. if multiple objects are selected, there should be
@@ -656,11 +656,26 @@ Named tests:
 Test plan (RC): pasting from Safari, Photos and Files; a transparent PNG (prints as paper); clipboard without an image
 (Paste disabled); the paste permission prompt.
 
-### Open item for Ryder: element Rotate 90° and scale
+### S29 — Rotate 90° gives the width back when it turns back
 
-Rotating a full-width table or text block a quarter turn narrows it to fit the label's short side, and turning it
-back does not widen it again. Ryder's "maintain ... scale" ruling may cover this too. Proposed: keep the set width
-on turning and only lay it out narrower, so turning back restores it. Not a story until confirmed.
+Ryder, 2026-10-23: "it should widen again. autofit when it rotates back. maybe the max width is changed in landscape,
+but it'd need to revert when it rotates back. object rotation does change size."
+
+As Ryder, I turn a full-width table or text block a quarter turn and back, and it is as wide as before.
+
+Acceptance:
+1. Rotate 90° may lay an item out narrower while it is sideways (the label's short side), but keeps its set width;
+   turning it back lays it out at that width again. Auto-width text refits on turning back.
+2. The width handle, Scale and pinch start from the width as laid out, so nothing jumps.
+3. Changing the label size still re-clamps widths (unchanged rule).
+
+Named tests:
+- `LabelEditorTests.rotateTwiceRestoresWidth`: a full-width table and a full-width text block, Rotate 90° twice →
+  the same frames as before; four times → the same document.
+- `LabelEditorTests.resizeSidewaysStartsFromShownWidth`: after one Rotate 90°, a handle drag of −2 mm narrows the
+  shown width by 2 mm.
+
+Test plan (RC): a picture wider than the short side; a group rotated; Undo across rotations; a label saved before S29.
 
 ## Later (not in this spec)
 
