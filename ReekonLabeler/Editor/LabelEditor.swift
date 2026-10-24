@@ -419,9 +419,34 @@ final class LabelEditor {
         commit(doc, action: "Label Size")
     }
 
+    /// Turns the label and everything on it as one piece (S22), so the print does not change. The printer
+    /// turns a rotated label's bitmap clockwise, so head-native → rotated turns the content anticlockwise and
+    /// rotated → head-native turns it back. Footprints map from printable area to printable area exactly.
     func setOrientation(_ orientation: Orientation) {
+        guard orientation != document.orientation else { return }
         var doc = document
+        let labelSize = doc.geometry.labelSizeMM
+        let anticlockwise = orientation == .rotated
         doc.orientation = orientation
+        let turnedGeometry = doc.geometry
+        for index in doc.elements.indices {
+            guard let layout = layouts[doc.elements[index].id] else { continue }
+            let frame = layout.frameMM
+            // Anticlockwise (y down): (x, y) → (y, W − x). Clockwise: (x, y) → (H − y, x).
+            doc.elements[index].originMM = anticlockwise
+                ? CGPoint(x: frame.minY, y: labelSize.width - frame.maxX)
+                : CGPoint(x: labelSize.height - frame.maxY, y: frame.minX)
+            let rotation = doc.elements[index].rotation
+            doc.elements[index].rotation = anticlockwise ? rotation.next.next.next : rotation.next
+            // Auto-width text measures its room from its origin to the far edge, which the turn changes; if
+            // that would rewrap it, fix its width where it is, as dragging the width handle does (S12).
+            if doc.elements[index].textContent?.autoWidth == true,
+               LayoutEngine.layout(doc.elements[index], in: turnedGeometry).contentSizeMM.width
+                != layout.contentSizeMM.width {
+                doc.elements[index].textContent?.autoWidth = false
+                doc.elements[index].widthMM = layout.contentSizeMM.width
+            }
+        }
         commit(doc, action: "Rotate Label")
     }
 
