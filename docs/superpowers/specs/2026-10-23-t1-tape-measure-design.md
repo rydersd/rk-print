@@ -1,6 +1,6 @@
 # REEKON Labeler — T1 Tomahawk tape measure (design spec)
 
-Date: 2026-10-23 · Owner: Ryder · Status: **draft, awaiting review**
+Date: 2026-10-23 · Owner: Ryder · Status: **approved 2026-10-23** (Ryder: "start")
 Source: `REEKON BLE SDK - Rev 1.5 - October 2026.pdf`, Section I (measuring tools), T1 firmware V1.2.6.
 Parent: `2026-10-19-reekon-labeler-design.md`, Later → "Tape-measure field" ("Needs its own spec"). Ryder
 2026-10-23: "can the app see the t1?" … "the tomahawk" … "add the spec now".
@@ -24,7 +24,7 @@ its 3 measurements i'm selecting, it should infer it's l w d. and have 3 rows."
 | On save | A measurement saved on the tool goes into the app's measurement list only. Nothing lands on the label by itself. Measurements saved before connecting are in the list too. |
 | Row labels | 3 picked → L, W, D. 2 picked → L, W. 1, or 4 and up → blank labels to type. Fewer than 2 still gives 2 rows. Every label stays editable. |
 
-## Proposed rulings (need Ryder's yes)
+## Proposed rulings (approved 2026-10-23, Ryder: "start")
 
 | Topic | Proposal |
 |---|---|
