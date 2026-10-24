@@ -199,6 +199,9 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         Self.log.error("Connect failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+        // A cancelled attempt superseded by another tape (or the same tape at a new address) says nothing
+        // about the current one.
+        guard peripheral.identifier == self.peripheral?.identifier else { return }
         self.peripheral = nil
         state = .failed(error?.localizedDescription ?? "Could not connect to the tape.")
         scan()
