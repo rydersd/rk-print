@@ -350,4 +350,116 @@ struct LabelEditorTests {
         #expect(TableLayout.heightMM(table, pointSize: layout.effectivePointSize) <= printable.height)
         #expect(printable.contains(layout.frameMM.insetBy(dx: 0.01, dy: 0.01)))
     }
+
+    /// S22: a label with text near a corner, a turned block and a scribble, on head-native 30 × 50.
+    private func turnLabelDocument() throws -> LabelDocument {
+        let scribble = try #require(ScribbleContent.fitting([[CGPoint(x: 38, y: 18), CGPoint(x: 46, y: 26)]],
+                                                            penWidthMM: ScribbleContent.penWidthMM))
+        return LabelDocument(size: .small, orientation: .headNative, grid: .off, elements: [
+            LabelElement(originMM: CGPoint(x: 2, y: 1), widthMM: 20, content: .text(TextContent(text: "BOLTS"))),
+            LabelElement(originMM: CGPoint(x: 28, y: 3), widthMM: 18, rotation: .quarter,
+                         content: .text(TextContent(text: "M6", pointSize: 10))),
+            LabelElement(originMM: scribble.originMM, widthMM: scribble.content.sizeMM.width,
+                         content: .scribble(scribble.content)),
+        ])
+    }
+
+    @Test func turnLabelPrintsTheSameLabel() throws {
+        let editor = LabelEditor(document: try turnLabelDocument(), undoManager: makeUndo(), persistsWorkingLabel: false)
+        let before = PrintJobEncoder.headBitmap(for: editor.document)
+
+        editor.setOrientation(.rotated)
+        #expect(editor.document.orientation == .rotated)
+        let after = PrintJobEncoder.headBitmap(for: editor.document)
+        #expect(after.width == before.width && after.height == before.height)
+        // Same place on the label: the same ink box, and only glyph edges re-rounded by the turn.
+        #expect(inkBox(after) == inkBox(before))
+        let differing = zip(after.dots, before.dots).filter { $0 != $1 }.count
+        let ink = before.dots.filter { $0 != 0 }.count
+        #expect(differing * 20 < ink, "\(differing) of \(ink) dots moved")
+    }
+
+    private func inkBox(_ bitmap: Bitmap) -> CGRect {
+        var box = CGRect.null
+        for y in 0..<bitmap.height {
+            for x in 0..<bitmap.width where bitmap.dots[y * bitmap.width + x] != 0 {
+                box = box.union(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+        }
+        return box
+    }
+
+    @Test func turnLabelTwiceRestoresLayout() throws {
+        let undo = makeUndo()
+        let editor = LabelEditor(document: try turnLabelDocument(), undoManager: undo, persistsWorkingLabel: false)
+        let original = editor.document
+
+        editor.setOrientation(.rotated)
+        #expect(editor.document.elements != original.elements)
+        undo.undo()
+        #expect(editor.document == original)
+
+        editor.setOrientation(.rotated)
+        editor.setOrientation(.headNative)
+        #expect(editor.document == original)
+    }
+
+    /// Codex review: auto-width text wrapped by the label's edge keeps its lines when the label turns.
+    @Test func turnLabelKeepsEdgeWrappedAutoWidthText() throws {
+        let doc = LabelDocument(size: .small, orientation: .headNative, grid: .off, elements: [
+            LabelElement(originMM: CGPoint(x: 30, y: 2), widthMM: 10,
+                         content: .text(TextContent(text: "LONG SHELF NAME", autoWidth: true))),
+        ])
+        let editor = LabelEditor(document: doc, undoManager: makeUndo(), persistsWorkingLabel: false)
+        let original = try #require(editor.layouts[editor.document.elements[0].id])
+        let before = PrintJobEncoder.headBitmap(for: editor.document)
+
+        editor.setOrientation(.rotated)
+        #expect(inkBox(PrintJobEncoder.headBitmap(for: editor.document)) == inkBox(before))
+        editor.setOrientation(.headNative)
+        #expect(editor.layouts[editor.document.elements[0].id] == original)
+    }
+
+    // MARK: S29 — Rotate 90° gives the width back
+
+    /// A full-width element on head-native 30 × 50, selected with Move.
+    private func fullWidthEditor(_ content: ElementContent) -> (LabelEditor, UUID) {
+        var doc = LabelDocument(size: .small, orientation: .headNative, grid: .off)
+        let printable = doc.geometry.printableRect
+        let element = LabelElement(originMM: printable.origin, widthMM: printable.width, content: content)
+        doc.elements = [element]
+        let editor = LabelEditor(document: doc, undoManager: makeUndo(), persistsWorkingLabel: false)
+        editor.setTool(.move)
+        editor.tap(element.id)
+        return (editor, element.id)
+    }
+
+    @Test func rotateTwiceRestoresWidth() throws {
+        for content in [ElementContent.table(TableContent(title: "BOLTS")),
+                        .text(TextContent(text: "SHELF A NUMBER ONE"))] {
+            let (editor, id) = fullWidthEditor(content)
+            let original = editor.document
+            let frame = try #require(editor.layouts[id]).frameMM
+
+            editor.rotateSelection()
+            #expect(try #require(editor.layouts[id]).frameMM.height < frame.width, "sideways lays out narrower")
+            editor.rotateSelection()
+            let back = try #require(editor.layouts[id]).frameMM
+            #expect(back == frame, "\(back) vs \(frame)")
+            editor.rotateSelection()
+            editor.rotateSelection()
+            #expect(editor.document == original)
+        }
+    }
+
+    @Test func resizeSidewaysStartsFromShownWidth() throws {
+        let (editor, id) = fullWidthEditor(.text(TextContent(text: "SHELF A")))
+        editor.rotateSelection()
+        let shown = try #require(editor.layouts[id]).contentSizeMM.width
+
+        editor.beginGesture()
+        editor.resizeElement(id, deltaMM: -2)
+        editor.endGesture(action: "Resize Text")
+        #expect(abs(try #require(editor.layouts[id]).contentSizeMM.width - (shown - 2)) < 0.01)
+    }
 }

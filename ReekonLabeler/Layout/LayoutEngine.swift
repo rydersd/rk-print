@@ -169,16 +169,20 @@ nonisolated enum LayoutEngine {
         return max(LabelElement.minimumWidthMM, farEdge - start)
     }
 
-    /// The document with every element's stored origin and width pulled inside the printable area.
+    /// The document with every element's stored origin pulled inside the printable area. Widths are kept as set:
+    /// an item turned sideways lays out narrower but is as wide as before when it turns back (S29).
     static func normalized(_ document: LabelDocument) -> LabelDocument {
         var doc = document
         let geometry = doc.geometry
         for index in doc.elements.indices {
-            let layout = layout(doc.elements[index], in: geometry)
-            doc.elements[index].originMM = layout.frameMM.origin
-            doc.elements[index].widthMM = layout.contentSizeMM.width
+            doc.elements[index].originMM = layout(doc.elements[index], in: geometry).frameMM.origin
         }
         return doc
+    }
+
+    /// The width an element is laid out at, which the width handle, Scale and pinch start from (S29).
+    static func shownWidthMM(_ element: LabelElement, in geometry: LabelGeometry) -> Double {
+        layout(element, in: geometry).contentSizeMM.width
     }
 
     // MARK: Helpers
