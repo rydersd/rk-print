@@ -138,6 +138,11 @@ final class T1Tape: NSObject {
         nearby.first { $0.id == peripheral.identifier }?.name ?? T1Protocol.displayName(peripheral.name)
     }
 
+    /// Whether a callback is about the tape being connected now, not an attempt it superseded.
+    private func isCurrent(_ peripheral: CBPeripheral) -> Bool {
+        peripheral.identifier == self.peripheral?.identifier
+    }
+
     private func didLoseConnection() {
         comm = nil
     }
@@ -182,6 +187,10 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
         // The remembered tool woke up: connect without the sheet, wherever its address now is.
         guard advertisement.deviceID == savedDeviceID else { return }
         if self.peripheral?.identifier == peripheral.identifier, case .connecting = state { return }
+        // A pending connection the user chose to another tape wins; only the remembered tool's own pending
+        // reconnect (at an old address) is replaced.
+        if let pending = self.peripheral, pending.identifier != savedPeripheralID,
+           deviceIDs[pending.identifier] != savedDeviceID { return }
         if !isConnected {
             Self.log.info("Remembered tool \(advertisement.deviceID, privacy: .public) is advertising; reconnecting")
             if let pending = self.peripheral { central.cancelPeripheralConnection(pending) }
@@ -193,6 +202,11 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard isCurrent(peripheral) else {
+            // A cancelled attempt that won the race: drop it so it cannot become the tape.
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
         Self.log.info("Connected to \(self.name(of: peripheral), privacy: .public); discovering services")
         peripheral.discoverServices([Self.syncService])
     }
@@ -201,7 +215,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
         Self.log.error("Connect failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
         // A cancelled attempt superseded by another tape (or the same tape at a new address) says nothing
         // about the current one.
-        guard peripheral.identifier == self.peripheral?.identifier else { return }
+        guard isCurrent(peripheral) else { return }
         self.peripheral = nil
         state = .failed(error?.localizedDescription ?? "Could not connect to the tape.")
         scan()
@@ -210,7 +224,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral,
                         timestamp: CFAbsoluteTime, isReconnecting: Bool, error: Error?) {
         Self.log.info("Disconnected: \(error?.localizedDescription ?? "by request", privacy: .public)")
-        guard peripheral.identifier == self.peripheral?.identifier else { return }
+        guard isCurrent(peripheral) else { return }
         didLoseConnection()
         if case .needsUpdate = state {
             self.peripheral = nil
@@ -230,6 +244,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        guard isCurrent(peripheral) else { return }
         guard let service = peripheral.services?.first(where: { $0.uuid == Self.syncService }) else {
             Self.log.error("No Sync Service on \(self.name(of: peripheral), privacy: .public)")
             state = .needsUpdate(name(of: peripheral))
@@ -240,6 +255,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        guard isCurrent(peripheral) else { return }
         guard let comm = service.characteristics?.first(where: { $0.uuid == Self.commID }) else {
             Self.log.error("No Comm characteristic on \(self.name(of: peripheral), privacy: .public)")
             state = .needsUpdate(name(of: peripheral))
@@ -256,7 +272,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic,
                     error: Error?) {
-        guard characteristic.uuid == Self.commID else { return }
+        guard isCurrent(peripheral), characteristic.uuid == Self.commID else { return }
         guard characteristic.isNotifying, error == nil else {
             Self.log.error("Subscribe failed: \(error?.localizedDescription ?? "not notifying", privacy: .public)")
             state = .failed("The tape did not accept the connection. Press a button on it and try again.")
@@ -279,7 +295,7 @@ extension T1Tape: CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard let value = characteristic.value else { return }
+        guard isCurrent(peripheral), let value = characteristic.value else { return }
         if characteristic.uuid == Self.commID {
             let deviceID = deviceIDs[peripheral.identifier] ?? savedDeviceID ?? peripheral.identifier.uuidString
             // Other opcodes (newer firmware, items from a T1M) are ignored.
