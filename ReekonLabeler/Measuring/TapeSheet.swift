@@ -1,10 +1,14 @@
 import SwiftUI
 
-/// Connects the T1 Tomahawk (S18) and lists its measurements (S19). The chosen tape is remembered and
-/// reconnects whenever it wakes.
+/// Connects the T1 Tomahawk (S18), lists its measurements (S19) and inserts the ticked ones as a table (S21).
+/// The chosen tape is remembered and reconnects whenever it wakes.
 struct TapeSheet: View {
     let tape: T1Tape
+    /// Adds the table to the label; one Undo removes it.
+    let insertTable: (TableContent) -> Void
     @AppStorage("measurementUnit") private var unit = MeasurementUnit.fractionalInches
+    /// Ticked measurement ids, in the order ticked: that is the order of the rows.
+    @State private var picked: [T1Measurement.ID] = []
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -22,7 +26,17 @@ struct TapeSheet: View {
             }
             .navigationTitle("Tape")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Insert Table") {
+                        insertTable(TableContent.fromMeasurements(pickedMeasurements, unit: unit))
+                        dismiss()
+                    }
+                    .disabled(pickedMeasurements.isEmpty)
+                    .accessibilityIdentifier("insertMeasurements")
+                }
+            }
             .onAppear { tape.sheetAppeared() }
             .onDisappear { tape.sheetDisappeared() }
         }
@@ -62,13 +76,19 @@ struct TapeSheet: View {
                 ForEach(MeasurementUnit.allCases) { Text($0.title).tag($0) }
             }
             ForEach(tape.measurements.entries) { measurement in
-                HStack {
-                    Text(measurement.letter).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(MeasurementFormat.format(positionUM: measurement.positionUM, unit: unit))
-                        .monospacedDigit()
+                Button { toggle(measurement.id) } label: {
+                    HStack {
+                        Image(systemName: picked.contains(measurement.id) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(picked.contains(measurement.id) ? Theme.selection : .secondary)
+                        Text(measurement.letter).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(MeasurementFormat.format(positionUM: measurement.positionUM, unit: unit))
+                            .monospacedDigit()
+                            .foregroundStyle(.primary)
+                    }
                 }
                 .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(picked.contains(measurement.id) ? .isSelected : [])
             }
         } header: {
             Text("Measurements")
@@ -76,8 +96,19 @@ struct TapeSheet: View {
             if tape.measurements.entries.isEmpty {
                 Text(tape.isConnected ? "Save a measurement on the T1 and it appears here."
                                       : "Connect your T1 to see the measurements saved on it.")
+            } else {
+                Text("Tick measurements in the order you want them as rows.")
             }
         }
+    }
+
+    /// Ticked measurements still in the list (a reconnect rebuilds it), in the order ticked.
+    private var pickedMeasurements: [T1Measurement] {
+        picked.compactMap { id in tape.measurements.entries.first { $0.id == id } }
+    }
+
+    private func toggle(_ id: T1Measurement.ID) {
+        if let index = picked.firstIndex(of: id) { picked.remove(at: index) } else { picked.append(id) }
     }
 
     private func isConnectable(_ tool: NearbyTool) -> Bool {

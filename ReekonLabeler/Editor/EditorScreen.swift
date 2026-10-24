@@ -197,7 +197,10 @@ struct EditorScreen: View {
         case .printer:
             PrinterSheet(printer: printer)
         case .tape:
-            TapeSheet(tape: tape)
+            TapeSheet(tape: tape) { table in
+                editor.addTable(rows: table.rows)
+                editor.editingID = editor.selectedID // the title is ready to type (S21)
+            }
         case .library:
             LibraryView(library: library, openID: editor.libraryID,
                         open: { id, name, doc in editor.load(doc, libraryID: id, name: name) },
