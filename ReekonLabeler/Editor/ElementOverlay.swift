@@ -103,19 +103,25 @@ struct ElementOverlay: View {
         let padding = TableLayout.paddingDots / LabelGeometry.dotsPerMM * scale
         return ZStack(alignment: .topLeading) {
             ForEach(TableLayout.cells(table, sizeMM: size), id: \.cell) { cell, frame in
+                // Each cell shrinks on its own to fit (S26), as the print does, and keeps the row's baseline. The
+                // field is laid out at the table's size and scaled down: while typing it does not take a new font.
+                let shrink = TableLayout.cellPointSize(table, cell: cell, tablePointSize: tablePointSize,
+                                                       cellWidthMM: frame.width) / tablePointSize
+                let innerWidth = frame.width * scale - 2 * padding
                 TextField("", text: Binding(get: { table[cell] },
                                             set: { editor.setTableCell(cell, to: $0, for: element.id) }))
-                    // Each cell shrinks on its own to fit (S26), as the print does.
                     .font(Font(FontCatalog.uiFont(TableLayout.font(for: cell),
-                                                  pointSize: TableLayout.cellPointSize(
-                                                      table, cell: cell, tablePointSize: tablePointSize,
-                                                      cellWidthMM: frame.width) * 25.4 / 72 * scale)))
+                                                  pointSize: tablePointSize * 25.4 / 72 * scale)))
                     .multilineTextAlignment(TableLayout.alignment(for: cell).textAlignment)
                     .foregroundStyle(.clear)
                     .tint(Theme.selection)
                     .focused($focusedCell, equals: cell)
-                    .padding(.horizontal, padding)
-                    .frame(width: frame.width * scale, height: frame.height * scale)
+                    .frame(width: innerWidth / shrink)
+                    .scaleEffect(shrink, anchor: .topLeading)
+                    .frame(width: innerWidth, alignment: .topLeading)
+                    .padding(.top, TableLayout.textTopMM(cell: cell, tablePointSize: tablePointSize,
+                                                         cellPointSize: tablePointSize * shrink) * scale)
+                    .frame(width: frame.width * scale, height: frame.height * scale, alignment: .top)
                     .offset(x: frame.minX * scale, y: frame.minY * scale)
                     .accessibilityIdentifier("tableCell-\(index)-\(cell.accessibilityName)")
             }

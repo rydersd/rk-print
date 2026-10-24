@@ -73,6 +73,15 @@ nonisolated enum TableLayout {
         return max(size, TextContent.minimumPointSize)
     }
 
+    /// How far below the cell's top a line at `cellPointSize` starts, in mm: the padding plus the gap that keeps a
+    /// shrunk line on the row's baseline (S26). The renderer and the in-place field both sit text here.
+    static func textTopMM(cell: TableCell, tablePointSize: Double, cellPointSize: Double) -> Double {
+        let ascent = { (size: Double) in
+            CTFontGetAscent(FontCatalog.ctFont(font(for: cell), pointSize: size * LayoutEngine.dotsPerPoint))
+        }
+        return (paddingDots + ascent(tablePointSize) - ascent(cellPointSize)) / LabelGeometry.dotsPerMM
+    }
+
     /// The width of a cell's text on one line, in dots.
     static func textWidthDots(_ text: String, cell: TableCell, pointSize: Double) -> Double {
         guard !text.isEmpty else { return 0 }

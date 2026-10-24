@@ -118,8 +118,6 @@ nonisolated enum LabelRenderer {
             let text = table[cell]
             guard !text.isEmpty else { continue }
             // A long entry shrinks to fit its cell (S26), on the same baseline as full-size text in the row.
-            let rowFont = FontCatalog.ctFont(TableLayout.font(for: cell),
-                                             pointSize: pointSize * LayoutEngine.dotsPerPoint)
             let cellSize = TableLayout.cellPointSize(table, cell: cell, tablePointSize: pointSize,
                                                      cellWidthMM: frameMM.width)
             let font = FontCatalog.ctFont(TableLayout.font(for: cell), pointSize: cellSize * LayoutEngine.dotsPerPoint)
@@ -135,7 +133,8 @@ nonisolated enum LabelRenderer {
             }
             context.saveGState()
             context.clip(to: inner)
-            context.textPosition = CGPoint(x: x.rounded(), y: (inner.maxY - CTFontGetAscent(rowFont)).rounded())
+            let top = TableLayout.textTopMM(cell: cell, tablePointSize: pointSize, cellPointSize: cellSize) * dots
+            context.textPosition = CGPoint(x: x.rounded(), y: (box.maxY - top - CTFontGetAscent(font)).rounded())
             CTLineDraw(ctLine, context)
             context.restoreGState()
         }
