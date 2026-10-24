@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Controls for the selection. Text settings apply to every selected text element (S5); picture settings
-/// show for a single picture, or a grouped picture tapped twice (S7, S8); rotate, group and delete apply
+/// show for a single picture, or a grouped picture tapped twice (S7, S8); Add Row for a table (S20); rotate, group and delete apply
 /// to the whole selection.
 struct InspectorView: View {
     let editor: LabelEditor
@@ -14,6 +14,13 @@ struct InspectorView: View {
                 if let text = editor.selectedElements.compactMap(\.textContent).first { textRows(text) }
                 if let element = editor.inspectedElement, let picture = element.picture {
                     pictureRows(element, picture)
+                }
+                if let element = editor.inspectedElement, element.table != nil {
+                    Button("Add Row", systemImage: "plus.rectangle") { editor.addTableRow(to: element.id) }
+                        .buttonStyle(.bordered)
+                        .disabled(!editor.canAddTableRow(to: element.id))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("addTableRowButton")
                 }
                 arrangeRow
             }

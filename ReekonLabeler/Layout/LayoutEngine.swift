@@ -8,7 +8,7 @@ nonisolated struct ElementLayout: Equatable, Sendable {
     var frameMM: CGRect
     /// The content's own size before rotation (width along its text lines or picture width).
     var contentSizeMM: CGSize
-    /// For text, the size actually drawn; 0 for pictures and scribbles.
+    /// For text and tables, the size actually drawn; 0 for pictures and scribbles.
     var effectivePointSize: Double
 }
 
@@ -43,6 +43,13 @@ nonisolated enum LayoutEngine {
             let top = clamp(originCross, crossMin, crossMax)
             pointSize = fittedPointSize(for: text, widthMM: width, availableMM: crossMax - top)
             height = textHeightMM(text, pointSize: pointSize, widthMM: width)
+            crossPosition = height >= crossMax - crossMin ? crossMin : clamp(top, crossMin, crossMax - height)
+        case .table(let table):
+            // Like text: shrinks to fit the cross space left below its top (S20).
+            let top = clamp(originCross, crossMin, crossMax)
+            pointSize = TableLayout.fittedPointSize(table, availableMM: crossMax - top)
+            // Never taller than the label: a table rotated onto the short side squeezes its rows instead.
+            height = min(TableLayout.heightMM(table, pointSize: pointSize), crossMax - crossMin)
             crossPosition = height >= crossMax - crossMin ? crossMin : clamp(top, crossMin, crossMax - height)
         case .picture, .scribble:
             // Keep proportions: a picture or scribble too tall for the cross space narrows instead.

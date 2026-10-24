@@ -285,4 +285,21 @@ struct LibraryTests {
 
         #expect(try library.load(id) == doc)
     }
+
+    // MARK: S20 — tables
+
+    @Test func tableRoundTrips() throws {
+        let table = TableContent(title: "Cabinet door", rows: [
+            TableRow(label: "L", value: "25 3/8\""), TableRow(label: "W", value: "14 1/2\""),
+            TableRow(label: "D", value: "3/4\""),
+        ], pointSize: 11)
+        let doc = LabelDocument(size: .large, elements: [
+            LabelElement(originMM: CGPoint(x: 2, y: 3), widthMM: 40, rotation: .quarter, content: .table(table)),
+        ])
+        let library = try makeLibrary()
+        let id = try library.save(doc, name: "Door")
+
+        #expect(try library.load(id) == doc)
+        // Labels saved before S20 have no table case; the old-JSON tests above still decode them.
+    }
 }

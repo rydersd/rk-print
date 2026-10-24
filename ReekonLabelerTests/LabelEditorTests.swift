@@ -299,4 +299,55 @@ struct LabelEditorTests {
         let printable = editor.document.geometry.printableRect
         #expect(editor.document.elements.allSatisfy { printable.contains(editor.layouts[$0.id]!.frameMM) })
     }
+
+    // MARK: S20 — tables
+
+    @Test func addTableHasTitleAndTwoRows() throws {
+        let undo = makeUndo()
+        let editor = LabelEditor(document: LabelDocument(), undoManager: undo, persistsWorkingLabel: false)
+        editor.addTable()
+        let id = try #require(editor.selectedID)
+        let table = try #require(editor.document.element(id)?.table)
+        #expect(table.title.isEmpty)
+        #expect(table.rows == [TableRow(), TableRow()])
+        let printable = editor.document.geometry.printableRect
+        #expect(printable.contains(try #require(editor.layouts[id]).frameMM.insetBy(dx: 0.001, dy: 0.001)))
+
+        undo.undo()
+        #expect(editor.document.elements.isEmpty)
+    }
+
+    @Test func addTableRowIsUndoable() throws {
+        let undo = makeUndo()
+        let editor = LabelEditor(document: LabelDocument(), undoManager: undo, persistsWorkingLabel: false)
+        editor.addTable()
+        let id = try #require(editor.selectedID)
+        editor.setTableCell(.value(1), to: "14 1/2\"", for: id)
+
+        editor.addTableRow(to: id)
+        let table = try #require(editor.document.element(id)?.table)
+        #expect(table.rows.count == 3)
+        #expect(table.rows[1].value == "14 1/2\"")
+
+        undo.undo()
+        #expect(editor.document.element(id)?.table?.rows.count == 2)
+        #expect(editor.document.element(id)?.table?.rows[1].value == "14 1/2\"")
+    }
+
+    /// Codex review of S20: rows added past the label's height ran off the print.
+    @Test func addTableRowStopsAtLabelEdge() throws {
+        let editor = LabelEditor(document: LabelDocument(), undoManager: makeUndo(), persistsWorkingLabel: false)
+        editor.addTable()
+        let id = try #require(editor.selectedID)
+        for _ in 0..<100 { editor.addTableRow(to: id) }
+
+        let element = try #require(editor.document.element(id))
+        let table = try #require(element.table)
+        let printable = editor.document.geometry.printableRect
+        #expect(table.rows.count < 100)
+        #expect(!editor.canAddTableRow(to: id))
+        let layout = LayoutEngine.layout(element, in: editor.document.geometry)
+        #expect(TableLayout.heightMM(table, pointSize: layout.effectivePointSize) <= printable.height)
+        #expect(printable.contains(layout.frameMM.insetBy(dx: 0.01, dy: 0.01)))
+    }
 }

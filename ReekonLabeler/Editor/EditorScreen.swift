@@ -82,9 +82,9 @@ struct EditorScreen: View {
         // The tools are in the top bar so they stay reachable while the keyboard covers the bottom bar (S13).
         ToolbarItemGroup(placement: .topBarLeading) {
             Button("Library", systemImage: "books.vertical") { sheet = .library }
-            toolMenu("Input", tools: [.type, .draw], showsPhoto: true)
+            toolMenu("Input", tools: [.type, .draw], showsInsertActions: true)
                 .accessibilityIdentifier("inputMenu")
-            toolMenu("Adjust", tools: [.move, .scale], showsPhoto: false)
+            toolMenu("Adjust", tools: [.move, .scale], showsInsertActions: false)
                 .accessibilityIdentifier("adjustMenu")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
@@ -138,16 +138,18 @@ struct EditorScreen: View {
 
     /// A dropdown of tools (S13). Its icon is the current tool when that tool is in this menu, tinted so
     /// the active menu stands out; otherwise the menu's first tool.
-    private func toolMenu(_ title: String, tools: [EditorTool], showsPhoto: Bool) -> some View {
+    private func toolMenu(_ title: String, tools: [EditorTool], showsInsertActions: Bool) -> some View {
         let isActive = tools.contains(editor.tool)
         let shown = isActive ? editor.tool : tools[0]
         return Menu {
             Picker(title, selection: Binding(get: { editor.tool }, set: { editor.setTool($0) })) {
                 ForEach(tools, id: \.self) { tool in Label(tool.title, systemImage: tool.systemImage).tag(tool) }
             }
-            if showsPhoto {
-                // An action, not a tool: the tool in use stays as it was.
+            if showsInsertActions {
+                // Actions, not tools: the tool in use stays as it was.
                 Button("Photo", systemImage: "photo.badge.plus") { showsPhotos = true }
+                Button("Table", systemImage: "tablecells") { editor.addTable() }
+                    .accessibilityIdentifier("addTableButton")
             }
         } label: {
             Label(title, systemImage: shown.systemImage)

@@ -87,6 +87,52 @@ nonisolated enum LabelRenderer {
             context.setLineJoin(.round)
             context.addPath(path)
             context.strokePath()
+        case .table(let table):
+            drawTable(table, pointSize: layout.effectivePointSize, sizeMM: layout.contentSizeMM, in: content,
+                      context: context)
+        }
+    }
+
+    /// A box with a line under the title and between rows, a line between labels and values, and each cell's
+    /// text on one line, clipped to its cell (S20).
+    private static func drawTable(_ table: TableContent, pointSize: Double, sizeMM: CGSize, in content: CGRect,
+                                  context: CGContext) {
+        let dots = LabelGeometry.dotsPerMM, line = TableLayout.lineDots
+        // Table mm count down from the top-left; Core Graphics y runs up from the bottom.
+        func rect(_ mm: CGRect) -> CGRect {
+            CGRect(x: content.minX + (mm.minX * dots).rounded(), y: content.maxY - (mm.maxY * dots).rounded(),
+                   width: (mm.width * dots).rounded(), height: (mm.height * dots).rounded())
+        }
+        context.setFillColor(gray: 0, alpha: 1)
+        context.setStrokeColor(gray: 0, alpha: 1)
+        context.stroke(content.insetBy(dx: line / 2, dy: line / 2), width: line)
+        let cells = TableLayout.cells(table, sizeMM: sizeMM)
+        for (cell, frameMM) in cells {
+            let box = rect(frameMM)
+            // The line under each row but the last, which the box already draws.
+            if box.minY > content.minY + line / 2 {
+                context.fill(CGRect(x: box.minX, y: box.minY, width: box.width, height: line))
+            }
+            if case .value = cell { context.fill(CGRect(x: box.minX, y: box.minY, width: line, height: box.height)) }
+
+            let text = table[cell]
+            guard !text.isEmpty else { continue }
+            let font = FontCatalog.ctFont(TableLayout.font(for: cell), pointSize: pointSize * LayoutEngine.dotsPerPoint)
+            let ctLine = CTLineCreateWithAttributedString(CFAttributedStringCreate(nil, text as CFString, [
+                kCTFontAttributeName: font, kCTForegroundColorAttributeName: CGColor(gray: 0, alpha: 1),
+            ] as CFDictionary))
+            let inner = box.insetBy(dx: TableLayout.paddingDots, dy: TableLayout.paddingDots)
+            let width = CTLineGetTypographicBounds(ctLine, nil, nil, nil)
+            let x: CGFloat = switch TableLayout.alignment(for: cell) {
+            case .left: inner.minX
+            case .center: inner.midX - width / 2
+            case .right: inner.maxX - width
+            }
+            context.saveGState()
+            context.clip(to: inner)
+            context.textPosition = CGPoint(x: x.rounded(), y: (inner.maxY - CTFontGetAscent(font)).rounded())
+            CTLineDraw(ctLine, context)
+            context.restoreGState()
         }
     }
 }

@@ -55,9 +55,9 @@ final class LabelLibrary {
         return label.name
     }
 
-    /// The first non-empty line of text, else "Untitled".
+    /// The first non-empty line of text or table title, else "Untitled".
     static func name(for document: LabelDocument) -> String {
-        let lines = document.elements.lazy.compactMap(\.textContent?.text)
+        let lines = document.elements.lazy.compactMap { $0.textContent?.text ?? $0.table?.title }
             .flatMap { $0.split(separator: "\n") }
             .map { $0.trimmingCharacters(in: .whitespaces) }
         return lines.first { !$0.isEmpty } ?? "Untitled"

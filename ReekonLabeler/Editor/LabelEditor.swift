@@ -19,7 +19,7 @@ final class LabelEditor {
     /// The selected elements. Selecting a grouped element selects its whole group (S5).
     private(set) var selection: Set<UUID> = []
     private(set) var tool = EditorTool.type
-    /// The text element whose inline text field has focus.
+    /// The text or table element whose inline text fields are showing.
     var editingID: UUID?
     /// The member of the selected group that a second tap picked out.
     private var focusedMemberID: UUID?
@@ -96,19 +96,20 @@ final class LabelEditor {
     func tap(_ id: UUID) {
         let members = document.groupMembers(of: id)
         guard !members.isEmpty else { return }
-        let isText = document.element(id)?.isText == true
+        // Text and tables type in place (S20).
+        let typesInPlace = document.element(id).map { $0.isText || $0.table != nil } == true
         if tool.selects {
             if members.isSubset(of: selection) { selection.subtract(members) } else { selection.formUnion(members) }
             editingID = nil
             focusedMemberID = nil
         } else if members.count > 1 {
             let isSecondTap = selection == members
-            editingID = isSecondTap && isText ? id : nil
+            editingID = isSecondTap && typesInPlace ? id : nil
             focusedMemberID = isSecondTap ? id : nil
             selection = members
         } else {
             selection = members
-            editingID = isText ? id : nil
+            editingID = typesInPlace ? id : nil
             focusedMemberID = nil
         }
     }
@@ -165,6 +166,37 @@ final class LabelEditor {
         commit(doc, action: "Add Picture")
         selection = [element.id]
         editingID = nil
+    }
+
+    /// Adds a table with an empty title and `rows`, below the existing elements and as wide as the printable
+    /// area, selected (S20).
+    func addTable(rows: [TableRow] = [TableRow(), TableRow()]) {
+        var doc = document
+        let printable = doc.geometry.printableRect
+        let element = LabelElement(originMM: CGPoint(x: printable.minX, y: nextFreeY(in: doc)),
+                                   widthMM: printable.width, content: .table(TableContent(rows: rows)))
+        doc.elements.append(element)
+        commit(doc, action: "Add Table")
+        selection = [element.id]
+        editingID = nil
+    }
+
+    /// Adds an empty row at the bottom of a table (S20).
+    /// Whether Add Row has room: the grown table must still fit across the label at the smallest text size.
+    func canAddTableRow(to id: UUID) -> Bool {
+        guard let element = document.element(id), let table = element.table else { return false }
+        let printable = document.geometry.printableRect
+        return TableLayout.canAddRow(table, availableMM: element.rotation.isSideways ? printable.width : printable.height)
+    }
+
+    func addTableRow(to id: UUID) {
+        guard canAddTableRow(to: id) else { return }
+        updateElement(id, action: "Add Row") { $0.table?.rows.append(TableRow()) }
+    }
+
+    func setTableCell(_ cell: TableCell, to text: String, for id: UUID) {
+        guard let table = document.element(id)?.table, table[cell] != text else { return }
+        updateElement(id, action: "Typing") { $0.table?[cell] = text }
     }
 
     /// A stroke drawn in Draw (S14), as points in label mm. It joins the last stroke's scribble when it
@@ -359,6 +391,12 @@ final class LabelEditor {
                     doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
                                                       LayoutEngine.snap(start.widthMM * factor, base.grid))
                 }
+            case .table(let table):
+                let size = (table.pointSize * factor * 2).rounded() / 2
+                doc.elements[index].table?.pointSize = min(max(size, TextContent.minimumPointSize),
+                                                           TextContent.maximumPointSize)
+                doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
+                                                  LayoutEngine.snap(start.widthMM * factor, base.grid))
             case .picture, .scribble:
                 doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
                                                   LayoutEngine.snap(start.widthMM * factor, base.grid))
