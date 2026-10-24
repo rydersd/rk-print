@@ -107,7 +107,8 @@ struct ElementOverlay: View {
                 // field is laid out at the table's size and scaled down: while typing it does not take a new font.
                 let shrink = TableLayout.cellPointSize(table, cell: cell, tablePointSize: tablePointSize,
                                                        cellWidthMM: frame.width) / tablePointSize
-                let innerWidth = frame.width * scale - 2 * padding
+                // A cell narrower than its padding (a table at its 2 mm minimum) still leaves the caret a sliver.
+                let innerWidth = max(1, frame.width * scale - 2 * padding)
                 TextField("", text: Binding(get: { table[cell] },
                                             set: { editor.setTableCell(cell, to: $0, for: element.id) }))
                     .font(Font(FontCatalog.uiFont(TableLayout.font(for: cell),
