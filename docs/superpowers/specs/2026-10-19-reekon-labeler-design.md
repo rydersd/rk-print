@@ -534,6 +534,134 @@ Named tests:
 Test plan (RC): a table and a group on 30 × 50 and 50 × 80; a picture; the print on paper before and after a
 turn; turning while a text block is being edited.
 
+## Proposed (S23–S28; not built until Ryder approves)
+
+Rulings from Ryder, 2026-10-23:
+- "should be able to tap to select, tap again to deselect objects. if multiple objects are selected, there should be
+  maybe a ... buttion with an option to make a template or delete". Applies in Move and Scale only; Type keeps
+  "second tap types". Make Template saves just the selection.
+- "when moving around we can use the full screen fit label on screen. when entering we'll have to show the tools
+  and keyboard". The inspector becomes a small floating bar in Move and Scale.
+- "the bounding boxes aren't really at the borders of the objects ... remove the padding and autofit (hug) the
+  objects". Both the drawn box and the item's edges hug.
+- "when editing table cells i should be typing in the cell, type should autosize. if i tap on a cell, the type cursor
+  should apper, and probably zoom into the cell". Each cell shrinks on its own; the zoom fills the width with the
+  row plus 10 pt on all sides.
+- "i should also be able to paste images from teh clipboard, they should be downsampled ... just shrink if the image
+  is too large, also can throw out color detail". Same import as Photo (S7: ≤ 1024 px, greyscale).
+
+### S23 — "…" menu for a multiple selection
+
+As Ryder, with several items selected in Move or Scale, I open **…** and choose Make Template or Delete.
+
+Acceptance:
+1. In Move and Scale, tapping an item selects it and tapping it again deselects it (already true since S5; kept).
+2. With 2 or more items selected, a **…** button appears with **Make Template** and **Delete**.
+3. Make Template saves a template holding only the selected items, in their places on this label size. Delete
+   removes them in one Undo step.
+
+Named tests:
+- `LabelEditorTests.templateFromSelectionHoldsOnlySelection`: 3 items, 2 selected → the template has those 2, same
+  frames.
+- `LabelEditorTests.deleteSelectionIsOneUndo`: delete 2 selected → one Undo brings both back.
+
+Test plan (RC): a group inside the selection; a table in the selection; a template made on 30 × 50 inserted into 50 × 80.
+
+### S24 — Full-screen label in Move and Scale
+
+As Ryder, while arranging I see the label as large as the screen allows; while typing I see the tools and keyboard.
+
+Acceptance:
+1. In Move and Scale, the label fits the whole space between the top and bottom bars, with or without a selection.
+2. The selection's controls (Rotate 90°, Group, Delete, Font, Add Row for a table) sit in one compact bar floating
+   near the bottom, never over the selected item. Add Row also appears in the **…** menu (S23) for a table.
+3. In Type, the inspector and keyboard show and the label fits the space above them.
+4. Switching tools re-fits the label within 60 ms (§6), with no change to the document.
+
+Named tests:
+- `EditorUITests.moveToolFillsScreen`: in Move, the canvas's height is larger than in Type with the keyboard up.
+- `EditorUITests.floatingBarRotatesSelection`: select in Move, the bar's Rotate 90° turns it.
+
+Test plan (RC): iPhone portrait and landscape; 30 × 50 and 50 × 80, both orientations; keyboard showing and hiding
+while a text block is edited; the bar against an item at the bottom edge.
+
+### S25 — Boxes hug the ink
+
+As Ryder, the box around an item sits on what prints, and I can push ink right to the printable edge.
+
+Acceptance:
+1. A text block's box is its ink: from the top of its highest glyph to the bottom of its lowest, and the width of its
+   longest line, not its set width or the line's full ascent and descent. Pictures and scribbles hug the same way
+   (blank margins inside a picture are not ink; the picture's own crop is unchanged).
+2. Move, snap and the label-edge stop use the hugged box, so ink can touch the printable edge.
+3. A label saved before S25 prints the same until something on it is moved.
+
+Named tests:
+- `LayoutEngineTests.textBoxHugsInk`: for "Bolts" at 14 pt, the frame equals the bitmap's ink box within 1 dot.
+- `LabelEditorTests.moveTextToEdgePutsInkOnEdge`: dragging text far up-left puts its ink on the printable top-left
+  edge.
+- `LibraryTests.preHugLabelPrintsSame`: a label saved before S25 gives the same head bitmap.
+
+Test plan (RC): an empty text block (still tappable, caret-sized); a lone space; rotated text; a group; a table
+(its lines are ink, so it already hugs); snapping at 1 mm and 0.5 mm.
+
+### S26 — Table cell text shrinks to fit its cell
+
+As Ryder, typing into a table cell, the text gets smaller as needed to stay inside that cell.
+
+Acceptance:
+1. One tap on a cell in Type shows the caret in that cell (S20 acceptance 2; a defect if it doesn't today).
+2. A cell's text shrinks in 0.5 pt steps until it fits its cell's width, down to the smallest size; the other cells
+   keep their size. It prints as the canvas shows.
+
+Named tests:
+- `TableLayoutTests.longCellShrinksAlone`: a long value shrinks; the title and other cells keep the table's size.
+- `EditorUITests.tapCellShowsCaret`: one tap on a cell of a selected-or-not table puts keyboard focus in it.
+
+Test plan (RC): text that won't fit even at the smallest size (clipped at the cell, not drawn over the next one);
+a rotated table; the print against the canvas.
+
+### S27 — Tapping a cell zooms to its row
+
+As Ryder, when I tap a table cell to type, the label zooms so that row fills the screen width.
+
+Acceptance:
+1. Tapping a cell in Type zooms the canvas so the cell's row, plus 10 pt on every side, fills the width above the
+   keyboard. When typing ends, the label zooms back to fit (S24). The animation presents within 60 ms.
+2. Zoom changes only the view; the document and print are unchanged.
+
+Named tests:
+- `EditorUITests.tapCellZoomsToRow`: after the tap, the row's on-screen width is the canvas width minus 20 pt (± 1 pt).
+- `EditorUITests.endTypingZoomsOut`: dismissing the keyboard gives back the fitted label.
+
+Test plan (RC): a rotated table (row runs vertically on screen); moving between cells with the keyboard; a row near
+the label's edge.
+
+Depends on: S24.
+
+### S28 — Paste a picture
+
+As Ryder, I paste an image I copied elsewhere onto the label.
+
+Acceptance:
+1. Input → **Paste Picture** (enabled when the clipboard holds an image) opens the crop, then places it like Photo
+   (S7). Paste also works from the canvas's long-press menu.
+2. It goes through the same import as Photo: shrunk to at most 1024 px on its longer side and stored greyscale.
+3. One Undo removes it.
+
+Named tests:
+- `PictureImportTests.pastedImageIsShrunkAndGrey`: a 3000 × 2000 colour PNG gives 1024 × 683 greyscale.
+- `LabelEditorTests.pastedPictureIsOneUndo`: after Paste and crop, one Undo removes it.
+
+Test plan (RC): pasting from Safari, Photos and Files; a transparent PNG (prints as paper); clipboard without an image
+(Paste disabled); the paste permission prompt.
+
+### Open item for Ryder: element Rotate 90° and scale
+
+Rotating a full-width table or text block a quarter turn narrows it to fit the label's short side, and turning it
+back does not widen it again. Ryder's "maintain ... scale" ruling may cover this too. Proposed: keep the set width
+on turning and only lay it out narrower, so turning back restores it. Not a story until confirmed.
+
 ## Later (not in this spec)
 
 - **Tape-measure field**: connect to a T1/T1M/T1R (SDK Section I), insert the received or live measurement
