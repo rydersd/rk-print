@@ -419,4 +419,47 @@ struct LabelEditorTests {
         editor.setOrientation(.headNative)
         #expect(editor.layouts[editor.document.elements[0].id] == original)
     }
+
+    // MARK: S29 — Rotate 90° gives the width back
+
+    /// A full-width element on head-native 30 × 50, selected with Move.
+    private func fullWidthEditor(_ content: ElementContent) -> (LabelEditor, UUID) {
+        var doc = LabelDocument(size: .small, orientation: .headNative, grid: .off)
+        let printable = doc.geometry.printableRect
+        let element = LabelElement(originMM: printable.origin, widthMM: printable.width, content: content)
+        doc.elements = [element]
+        let editor = LabelEditor(document: doc, undoManager: makeUndo(), persistsWorkingLabel: false)
+        editor.setTool(.move)
+        editor.tap(element.id)
+        return (editor, element.id)
+    }
+
+    @Test func rotateTwiceRestoresWidth() throws {
+        for content in [ElementContent.table(TableContent(title: "BOLTS")),
+                        .text(TextContent(text: "SHELF A NUMBER ONE"))] {
+            let (editor, id) = fullWidthEditor(content)
+            let original = editor.document
+            let frame = try #require(editor.layouts[id]).frameMM
+
+            editor.rotateSelection()
+            #expect(try #require(editor.layouts[id]).frameMM.height < frame.width, "sideways lays out narrower")
+            editor.rotateSelection()
+            let back = try #require(editor.layouts[id]).frameMM
+            #expect(back == frame, "\(back) vs \(frame)")
+            editor.rotateSelection()
+            editor.rotateSelection()
+            #expect(editor.document == original)
+        }
+    }
+
+    @Test func resizeSidewaysStartsFromShownWidth() throws {
+        let (editor, id) = fullWidthEditor(.text(TextContent(text: "SHELF A")))
+        editor.rotateSelection()
+        let shown = try #require(editor.layouts[id]).contentSizeMM.width
+
+        editor.beginGesture()
+        editor.resizeElement(id, deltaMM: -2)
+        editor.endGesture(action: "Resize Text")
+        #expect(abs(try #require(editor.layouts[id]).contentSizeMM.width - (shown - 2)) < 0.01)
+    }
 }

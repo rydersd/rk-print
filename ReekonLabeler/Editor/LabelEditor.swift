@@ -43,6 +43,10 @@ final class LabelEditor {
     @ObservationIgnored private var lastStock = LabelStock.white
     /// The scribble the last stroke went into and when that stroke ended (S14).
     @ObservationIgnored private var lastStroke: (scribbleID: UUID, endedAt: TimeInterval)?
+    /// Rotate 90° presses in a row (S29): the document before the first, how many, and the result of the last. Any
+    /// other change makes the result stale, which starts a new run.
+    @ObservationIgnored private var rotationRun: (start: LabelDocument, selection: Set<UUID>, turns: Int,
+                                                  result: LabelDocument)?
 
     /// The working label kept in UserDefaults before S9; moved into the library on first launch.
     private static let legacyWorkingLabelKey = "workingLabel"
@@ -217,7 +221,7 @@ final class LabelEditor {
            doc.elements[index].rotation == .none {
             // Back to label mm at the scribble's current place and size, then refit around every stroke.
             let element = doc.elements[index]
-            let scale = element.widthMM / joined.sizeMM.width
+            let scale = LayoutEngine.shownWidthMM(element, in: doc.geometry) / joined.sizeMM.width
             strokes = joined.strokes.map { $0.map { CGPoint(x: element.originMM.x + $0.x * scale,
                                                              y: element.originMM.y + $0.y * scale) } } + strokes
             penWidth = joined.penWidthMM * scale
@@ -301,21 +305,28 @@ final class LabelEditor {
     }
 
     /// Turns the selection a quarter turn clockwise about the centre of its footprints, then nudges it back
-    /// inside the printable area (S6).
+    /// inside the printable area (S6). Presses in a row are measured from the footprints before the first, so a
+    /// sideways item squeezed to fit the label is back as wide, and in the same place, when it turns back (S29).
     func rotateSelection() {
-        let frames = selectedElements.compactMap { element in layouts[element.id].map { (element.id, $0.frameMM) } }
+        let run = rotationRun.flatMap { $0.result == document && $0.selection == selection ? $0 : nil }
+        let start = run?.start ?? document
+        let turns = (run?.turns ?? 0) + 1
+        let frames = start.elements.filter { selection.contains($0.id) }
+            .map { ($0.id, LayoutEngine.layout($0, in: start.geometry).frameMM) }
         guard let first = frames.first?.1 else { return }
         let centre = frames.dropFirst().reduce(first) { $0.union($1.1) }
-        var doc = document
+        var doc = start
         var turned: [UUID: CGRect] = [:]
         for (id, frame) in frames {
             guard let index = doc.index(of: id) else { continue }
-            // Clockwise on the label (y down): an offset (dx, dy) from the centre becomes (−dy, dx).
-            let dx = frame.midX - centre.midX, dy = frame.midY - centre.midY
-            let size = CGSize(width: frame.height, height: frame.width)
-            let origin = CGPoint(x: centre.midX - dy - size.width / 2, y: centre.midY + dx - size.height / 2)
+            // Clockwise on the label (y down): an offset (dx, dy) from the centre becomes (−dy, dx) each turn.
+            var offset = CGPoint(x: frame.midX - centre.midX, y: frame.midY - centre.midY)
+            for _ in 0..<turns % 4 { offset = CGPoint(x: -offset.y, y: offset.x) }
+            let size = turns.isMultiple(of: 2) ? frame.size : CGSize(width: frame.height, height: frame.width)
+            let origin = CGPoint(x: centre.midX + offset.x - size.width / 2,
+                                 y: centre.midY + offset.y - size.height / 2)
             turned[id] = CGRect(origin: origin, size: size)
-            doc.elements[index].rotation = doc.elements[index].rotation.next
+            for _ in 0..<turns % 4 { doc.elements[index].rotation = doc.elements[index].rotation.next }
             doc.elements[index].originMM = origin
         }
         let shift = LayoutEngine.movedDelta(of: Array(turned.values), by: .zero, grid: .off, in: doc.geometry)
@@ -324,6 +335,7 @@ final class LabelEditor {
             doc.elements[index].originMM.y += shift.height
         }
         commit(doc, action: "Rotate")
+        rotationRun = (start, selection, turns, document)
     }
 
     // MARK: Gestures
@@ -357,7 +369,8 @@ final class LabelEditor {
         var doc = document
         // Dragging the handle fixes a text block's width from here on (S12).
         doc.elements[index].textContent?.autoWidth = false
-        doc.elements[index].widthMM = LayoutEngine.resizedWidth(doc.elements[index], from: start.widthMM,
+        let startWidth = LayoutEngine.shownWidthMM(start, in: base.geometry)
+        doc.elements[index].widthMM = LayoutEngine.resizedWidth(doc.elements[index], from: startWidth,
                                                                 by: deltaMM, grid: base.grid, in: doc.geometry)
         commit(doc, action: nil)
     }
@@ -382,6 +395,7 @@ final class LabelEditor {
         var doc = document
         for start in base.elements where selection.contains(start.id) {
             guard let index = doc.index(of: start.id) else { continue }
+            let startWidth = LayoutEngine.shownWidthMM(start, in: base.geometry)
             switch start.content {
             case .text(let text):
                 let size = (text.pointSize * factor * 2).rounded() / 2
@@ -389,17 +403,17 @@ final class LabelEditor {
                                                                  TextContent.maximumPointSize)
                 if !text.autoWidth {
                     doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
-                                                      LayoutEngine.snap(start.widthMM * factor, base.grid))
+                                                      LayoutEngine.snap(startWidth * factor, base.grid))
                 }
             case .table(let table):
                 let size = (table.pointSize * factor * 2).rounded() / 2
                 doc.elements[index].table?.pointSize = min(max(size, TextContent.minimumPointSize),
                                                            TextContent.maximumPointSize)
                 doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
-                                                  LayoutEngine.snap(start.widthMM * factor, base.grid))
+                                                  LayoutEngine.snap(startWidth * factor, base.grid))
             case .picture, .scribble:
                 doc.elements[index].widthMM = max(LabelElement.minimumWidthMM,
-                                                  LayoutEngine.snap(start.widthMM * factor, base.grid))
+                                                  LayoutEngine.snap(startWidth * factor, base.grid))
             }
         }
         commit(doc, action: nil)
@@ -416,6 +430,10 @@ final class LabelEditor {
     func setSize(_ size: LabelSize) {
         var doc = document
         doc.size = size
+        // A new size re-clamps widths for good (S2), unlike a turn (S29).
+        for index in doc.elements.indices {
+            doc.elements[index].widthMM = LayoutEngine.shownWidthMM(doc.elements[index], in: doc.geometry)
+        }
         commit(doc, action: "Label Size")
     }
 
